@@ -1799,10 +1799,66 @@
                 }
             });
             
-            // Prevent double-tap zoom on buttons
+            // Handle touch events for buttons to ensure they work on mobile
             document.addEventListener('touchend', function(e) {
-                if (e.target.matches('.pick-button, .btn, .edit-btn, .save-btn, .cancel-btn, .item-name-text')) {
+                const target = e.target;
+                console.log('Touch end on:', target.className, target.id);
+                
+                // Handle pick buttons
+                if (target.classList.contains('pick-button')) {
                     e.preventDefault();
+                    const skuId = target.id.replace('btn-', '');
+                    if (skuId) {
+                        pickItem(parseInt(skuId));
+                    }
+                }
+                
+                // Handle refresh button
+                if (target.id === 'refreshBtn') {
+                    e.preventDefault();
+                    refreshItems();
+                }
+                
+                // Handle fullscreen button
+                if (target.id === 'fullscreenBtn') {
+                    e.preventDefault();
+                    toggleFullscreen();
+                }
+                
+                // Handle edit buttons
+                if (target.classList.contains('edit-btn')) {
+                    e.preventDefault();
+                    const onclick = target.getAttribute('onclick');
+                    if (onclick) {
+                        // Extract SKU ID from onclick attribute
+                        const match = onclick.match(/editItemName\((\d+)\)/);
+                        if (match) {
+                            editItemName(parseInt(match[1]));
+                        }
+                    }
+                }
+                
+                // Handle save/cancel buttons
+                if (target.classList.contains('save-btn')) {
+                    e.preventDefault();
+                    target.click(); // Trigger the original click handler
+                }
+                
+                if (target.classList.contains('cancel-btn')) {
+                    e.preventDefault();
+                    target.click(); // Trigger the original click handler
+                }
+                
+                // Handle item name text
+                if (target.classList.contains('item-name-text')) {
+                    e.preventDefault();
+                    const onclick = target.getAttribute('onclick');
+                    if (onclick) {
+                        const match = onclick.match(/editItemName\((\d+)\)/);
+                        if (match) {
+                            editItemName(parseInt(match[1]));
+                        }
+                    }
                 }
             });
             
