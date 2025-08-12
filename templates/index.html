@@ -1,0 +1,1585 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AutoDroid Item Picker</title>
+    <!-- Google Font: JetBrains Mono -->
+    <link rel="preconnect" href="https://fonts.gstatic.com">
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;600;700;900&display=swap" rel="stylesheet">
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Socket.IO -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.js"></script>
+    <style>
+        :root {
+            --primary-color: #4CB7B1;
+            --secondary-color: #5cacae;
+            --text-color: #306873;
+            --bg-color: #e5fbfe;
+            --card-bg: #ffffff;
+            --shadow: 0 4px 10px rgba(0,0,0,0.1);
+        }
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            font-family: 'JetBrains Mono', monospace;
+            color: var(--text-color);
+            overflow-x: hidden;
+        }
+
+        /* Splash Screen Styles */
+        .splash-screen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 50%, #4CB7B1 100%);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 10000;
+            animation: fadeOut 1s ease-in-out 4s forwards;
+        }
+
+        .splash-content {
+            text-align: center;
+            color: white;
+            animation: splashPulse 2s ease-in-out infinite;
+        }
+
+        .splash-logo {
+            width: 200px;
+            height: 200px;
+            margin: 0 auto 2rem;
+            animation: logoPulse 2s ease-in-out infinite;
+        }
+
+        .splash-title {
+            font-size: 3rem;
+            font-weight: 900;
+            margin-bottom: 1rem;
+            text-shadow: 0 4px 20px rgba(0,0,0,0.3);
+            animation: titleGlow 2s ease-in-out infinite alternate;
+        }
+
+        .splash-subtitle {
+            font-size: 1.2rem;
+            font-weight: 300;
+            opacity: 0.9;
+            animation: fadeInUp 1s ease-out 1s both;
+        }
+
+        .loading-dots {
+            display: flex;
+            justify-content: center;
+            gap: 0.5rem;
+            margin-top: 2rem;
+        }
+
+        .loading-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: rgba(255,255,255,0.8);
+            animation: dotBounce 1.4s ease-in-out infinite both;
+        }
+
+        .loading-dot:nth-child(1) { animation-delay: -0.32s; }
+        .loading-dot:nth-child(2) { animation-delay: -0.16s; }
+        .loading-dot:nth-child(3) { animation-delay: 0s; }
+
+        /* Main App Styles */
+        .main-app {
+            opacity: 0;
+            transform: translateY(20px);
+            animation: slideInUp 1s ease-out 5s both;
+            background-color: var(--bg-color);
+            min-height: 100vh;
+        }
+
+        .navbar {
+            background-color: var(--card-bg);
+            box-shadow: var(--shadow);
+            transform: translateY(-100px);
+            animation: slideDown 0.8s ease-out 5.5s both;
+        }
+
+        .navbar-brand {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .navbar-brand img {
+            height: 120px;
+            transition: transform 0.3s ease;
+        }
+
+        .navbar-brand img:hover {
+            transform: scale(1.1);
+        }
+
+        .hero-section {
+            background-color: var(--card-bg);
+            min-height: 150px;
+            padding: 2rem 1rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: var(--shadow);
+            margin-bottom: 2rem;
+            flex-direction: column;
+            transform: scale(0.8);
+            opacity: 0;
+            animation: zoomIn 0.8s ease-out 6s both;
+        }
+
+        .hero-section h1 {
+            font-weight: 900;
+            font-size: 2rem;
+            margin: 0;
+            color: var(--secondary-color);
+            background: linear-gradient(45deg, var(--primary-color), var(--secondary-color));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .hero-section .subtitle {
+            font-size: 1rem;
+            color: var(--text-color);
+            margin-top: 0.5rem;
+        }
+
+        .status-bar {
+            background-color: var(--card-bg);
+            padding: 1rem 0;
+            margin-bottom: 1rem;
+            border-radius: 8px;
+            box-shadow: var(--shadow);
+            opacity: 0;
+            transform: translateX(-50px);
+            animation: slideInLeft 0.8s ease-out 6.5s both;
+        }
+
+        .status-indicator {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            justify-content: center;
+            margin-bottom: 1rem;
+        }
+
+        .status-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: #dc3545;
+            animation: pulse 2s infinite;
+        }
+
+        .status-dot.connected {
+            background: #28a745;
+        }
+
+        .controls {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        .btn {
+            padding: 0.75rem 2rem;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            text-decoration: none;
+            display: inline-block;
+            font-family: 'JetBrains Mono', monospace;
+            transform: translateY(20px);
+            opacity: 0;
+            animation: bounceInUp 0.6s ease-out 6.5s both;
+        }
+
+        .btn-primary {
+            background-color: var(--primary-color);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background-color: #3BA39D;
+            transform: translateY(-5px) scale(1.05);
+            box-shadow: 0 10px 25px rgba(76,183,177,0.3);
+        }
+
+        .btn:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .card {
+            border: none;
+            border-radius: 12px;
+            box-shadow: var(--shadow);
+            background-color: var(--card-bg);
+            max-width: 1200px;
+            margin: 0 auto 2rem;
+            opacity: 0;
+            transform: translateY(50px);
+            animation: fadeInUp 0.8s ease-out 7.5s both;
+        }
+
+        .items-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 1.5rem;
+            padding: 2rem;
+        }
+
+        .item-card {
+            background: white;
+            border: 2px solid var(--bg-color);
+            border-radius: 12px;
+            padding: 1.5rem;
+            transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            cursor: pointer;
+            position: relative;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            opacity: 0;
+            transform: translateY(30px) rotateX(15deg);
+            animation: cardReveal 0.6s ease-out both;
+        }
+
+        .item-card:nth-child(odd) {
+            animation-delay: 8s;
+        }
+
+        .item-card:nth-child(even) {
+            animation-delay: 8.2s;
+        }
+
+        .item-card:hover {
+            border-color: var(--primary-color);
+            transform: translateY(-10px) scale(1.02);
+            box-shadow: 0 20px 40px rgba(76,183,177,0.2);
+        }
+
+        .item-card.picking {
+            border-color: #ffc107;
+            background: #fff9c4;
+            animation: pickingPulse 1s ease-in-out infinite;
+        }
+
+        .item-card.success {
+            border-color: #28a745;
+            background: #d4edda;
+            animation: successBounce 0.6s ease-out;
+        }
+
+        .item-card.failed {
+            border-color: #dc3545;
+            background: #f8d7da;
+            animation: failShake 0.5s ease-in-out;
+        }
+
+        .item-card.disabled {
+            opacity: 0.7;
+            pointer-events: none;
+        }
+
+        .item-image {
+            width: 100%;
+            height: 100px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 1rem;
+            background: #f8f9fa;
+            border-radius: 8px;
+            overflow: hidden;
+            transition: transform 0.3s ease;
+        }
+
+        .item-card:hover .item-image {
+            transform: scale(1.05);
+        }
+
+        .item-image img {
+            max-width: 100%;
+            max-height: 100%;
+            object-fit: contain;
+            border-radius: 4px;
+            transition: transform 0.3s ease;
+        }
+
+        .item-sku {
+            font-size: 0.8rem;
+            color: var(--secondary-color);
+            margin-bottom: 0.5rem;
+            font-weight: 600;
+        }
+
+        .item-name {
+            font-size: 1rem;
+            color: var(--text-color);
+            margin-bottom: 0.75rem;
+            font-weight: 600;
+            line-height: 1.2;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .item-name-text {
+            flex: 1;
+            cursor: pointer;
+            transition: color 0.3s ease;
+        }
+
+        .item-name-text:hover {
+            color: var(--primary-color);
+        }
+
+        .item-name-input {
+            flex: 1;
+            border: 2px solid var(--primary-color);
+            border-radius: 4px;
+            padding: 0.25rem 0.5rem;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: var(--text-color);
+            background: white;
+        }
+
+        .edit-btn {
+            background: none;
+            border: none;
+            color: var(--primary-color);
+            cursor: pointer;
+            font-size: 0.8rem;
+            padding: 0.25rem;
+            border-radius: 3px;
+            transition: all 0.2s ease;
+        }
+
+        .edit-btn:hover {
+            background: var(--primary-color);
+            color: white;
+            transform: scale(1.1);
+        }
+
+        .save-btn, .cancel-btn {
+            border: none;
+            padding: 0.25rem 0.5rem;
+            border-radius: 3px;
+            font-size: 0.7rem;
+            cursor: pointer;
+            font-family: 'JetBrains Mono', monospace;
+            transition: transform 0.2s ease;
+        }
+
+        .save-btn {
+            background: #28a745;
+            color: white;
+        }
+
+        .cancel-btn {
+            background: #dc3545;
+            color: white;
+            margin-left: 0.25rem;
+        }
+
+        .save-btn:hover, .cancel-btn:hover {
+            transform: scale(1.1);
+        }
+
+        .item-details {
+            font-size: 0.85rem;
+            color: var(--secondary-color);
+            margin-bottom: 1rem;
+            flex-grow: 1;
+            line-height: 1.3;
+        }
+
+        .pick-button {
+            width: 100%;
+            padding: 0.75rem;
+            background: linear-gradient(45deg, var(--primary-color), var(--secondary-color));
+            color: white;
+            border: none;
+            border-radius: 6px;
+            font-size: 0.9rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-family: 'JetBrains Mono', monospace;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .pick-button::before {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 0;
+            height: 0;
+            background: rgba(255,255,255,0.3);
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+            transition: all 0.3s ease;
+        }
+
+        .pick-button:hover::before {
+            width: 300px;
+            height: 300px;
+        }
+
+        .pick-button:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 10px 25px rgba(76,183,177,0.4);
+        }
+
+        .pick-button:disabled {
+            background: #cccccc !important;
+            cursor: not-allowed !important;
+            transform: none !important;
+            opacity: 0.6;
+        }
+
+        .status-overlay {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            padding: 0.25rem 0.75rem;
+            border-radius: 15px;
+            font-size: 0.7rem;
+            font-weight: 600;
+            color: white;
+            animation: statusSlideIn 0.3s ease-out;
+        }
+
+        .status-overlay.picking {
+            background: #ffc107;
+        }
+
+        .status-overlay.success {
+            background: #28a745;
+        }
+
+        .status-overlay.failed {
+            background: #dc3545;
+        }
+
+        .activity-log {
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 1.5rem;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
+        .log-entry {
+            padding: 0.75rem;
+            margin-bottom: 0.5rem;
+            border-radius: 6px;
+            font-size: 0.85rem;
+            border-left: 4px solid var(--primary-color);
+            background: white;
+            animation: logSlideIn 0.3s ease-out;
+            transition: transform 0.2s ease;
+        }
+
+        .log-entry:hover {
+            transform: translateX(5px);
+        }
+
+        .log-entry.success {
+            background: #d4edda;
+            border-left-color: #28a745;
+        }
+
+        .log-entry.error {
+            background: #f8d7da;
+            border-left-color: #dc3545;
+        }
+
+        .log-entry.info {
+            background: #d1ecf1;
+            border-left-color: #17a2b8;
+        }
+
+        .log-entry.warning {
+            background: #fff3cd;
+            border-left-color: #ffc107;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: var(--secondary-color);
+        }
+
+        .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid var(--primary-color);
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+        }
+
+        .notification {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 15px 20px;
+            border-radius: 8px;
+            color: white;
+            font-weight: 600;
+            z-index: 1000;
+            font-family: 'JetBrains Mono', monospace;
+            animation: notificationSlideIn 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+        }
+
+        .notification.success {
+            background: linear-gradient(45deg, #28a745, #34ce57);
+        }
+
+        .notification.error {
+            background: linear-gradient(45deg, #dc3545, #e74c3c);
+        }
+
+        .notification.info {
+            background: linear-gradient(45deg, #17a2b8, #3498db);
+        }
+
+        .notification.warning {
+            background: linear-gradient(45deg, #ffc107, #f39c12);
+            color: #212529;
+        }
+
+        /* Global Loading Overlay */
+        .global-loading-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: rgba(0, 0, 0, 0.7);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 9999;
+            backdrop-filter: blur(5px);
+            animation: overlayFadeIn 0.3s ease-out;
+        }
+
+        .global-loading-content {
+            background: linear-gradient(145deg, #ffffff, #f0f0f0);
+            padding: 3rem;
+            border-radius: 20px;
+            text-align: center;
+            box-shadow: 0 30px 60px rgba(0,0,0,0.3);
+            max-width: 350px;
+            font-family: 'JetBrains Mono', monospace;
+            animation: modalBounceIn 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+
+        .global-loading-spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid var(--primary-color);
+            border-radius: 50%;
+            width: 80px;
+            height: 80px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 1.5rem;
+        }
+
+        .global-loading-text {
+            color: var(--text-color);
+            font-weight: 700;
+            font-size: 1.2rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .global-loading-subtext {
+            color: var(--secondary-color);
+            font-size: 0.9rem;
+        }
+
+        /* Animations */
+        @keyframes fadeOut {
+            to {
+                opacity: 0;
+                visibility: hidden;
+            }
+        }
+
+        @keyframes splashPulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+        }
+
+        @keyframes logoPulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+        }
+
+        @keyframes titleGlow {
+            0% { text-shadow: 0 4px 20px rgba(0,0,0,0.3); }
+            100% { text-shadow: 0 4px 30px rgba(255,255,255,0.5), 0 0 40px rgba(255,255,255,0.3); }
+        }
+
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @keyframes dotBounce {
+            0%, 80%, 100% {
+                transform: scale(0);
+            }
+            40% {
+                transform: scale(1);
+            }
+        }
+
+        @keyframes slideInUp {
+            from {
+                opacity: 0;
+                transform: translateY(50px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @keyframes slideDown {
+            from {
+                transform: translateY(-100px);
+            }
+            to {
+                transform: translateY(0);
+            }
+        }
+
+        @keyframes zoomIn {
+            from {
+                opacity: 0;
+                transform: scale(0.8);
+            }
+            to {
+                opacity: 1;
+                transform: scale(1);
+            }
+        }
+
+        @keyframes slideInLeft {
+            from {
+                opacity: 0;
+                transform: translateX(-50px);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+
+        @keyframes bounceInUp {
+            0% {
+                opacity: 0;
+                transform: translateY(100px);
+            }
+            60% {
+                opacity: 1;
+                transform: translateY(-10px);
+            }
+            80% {
+                transform: translateY(5px);
+            }
+            100% {
+                transform: translateY(0);
+            }
+        }
+
+        @keyframes cardReveal {
+            from {
+                opacity: 0;
+                transform: translateY(30px) rotateX(15deg);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0) rotateX(0deg);
+            }
+        }
+
+        @keyframes pickingPulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.02); }
+        }
+
+        @keyframes successBounce {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+            100% { transform: scale(1); }
+        }
+
+        @keyframes failShake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-5px); }
+            75% { transform: translateX(5px); }
+        }
+
+        @keyframes statusSlideIn {
+            from {
+                opacity: 0;
+                transform: translateX(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+
+        @keyframes logSlideIn {
+            from {
+                opacity: 0;
+                transform: translateX(-20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+
+        @keyframes notificationSlideIn {
+            from {
+                opacity: 0;
+                transform: translateX(100%) scale(0.8);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(0) scale(1);
+            }
+        }
+
+        @keyframes overlayFadeIn {
+            from {
+                opacity: 0;
+            }
+            to {
+                opacity: 1;
+            }
+        }
+
+        @keyframes modalBounceIn {
+            0% {
+                opacity: 0;
+                transform: scale(0.3) translateY(100px);
+            }
+            50% {
+                opacity: 1;
+                transform: scale(1.05) translateY(-10px);
+            }
+            70% {
+                transform: scale(0.9) translateY(0);
+            }
+            100% {
+                transform: scale(1) translateY(0);
+            }
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
+
+        @media (max-width: 768px) {
+            .splash-title {
+                font-size: 2rem;
+            }
+            
+            .splash-logo {
+                width: 150px;
+                height: 150px;
+            }
+            
+            .hero-section {
+                min-height: auto;
+                padding: 1.5rem 1rem;
+            }
+            
+            .hero-section h1 {
+                font-size: 1.75rem;
+                margin-bottom: 0.5rem;
+            }
+            
+            .items-grid {
+                grid-template-columns: 1fr;
+                gap: 1rem;
+                padding: 1.5rem 1rem;
+            }
+            
+            .controls {
+                flex-direction: column;
+                align-items: center;
+            }
+            
+            .navbar-brand img {
+                height: 80px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Splash Screen -->
+    <div class="splash-screen" id="splashScreen">
+        <div class="splash-content">
+            <div class="splash-logo">
+                <img src="/static/images/Klogo.svg" alt="AutoDroid Logo" style="width: 100%; height: 100%; filter: brightness(0) invert(1);">
+            </div>
+            <h1 class="splash-title">AutoDroid</h1>
+            <p class="splash-subtitle">Intelligent Item Picking System</p>
+            <div class="loading-dots">
+                <div class="loading-dot"></div>
+                <div class="loading-dot"></div>
+                <div class="loading-dot"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Application -->
+    <div class="main-app" id="mainApp">
+        <!-- Navbar with Logo -->
+        <nav class="navbar navbar-expand-lg">
+            <div class="container">
+                <a class="navbar-brand" href="#">
+                    <img src="/static/images/Klogo.svg" alt="AutoDroid Logo">
+                </a>
+            </div>
+        </nav>
+
+        <!-- Hero Section -->
+        <div class="hero-section">
+            <div class="text-center">
+                <h1>AutoDroid Item Picker</h1>
+                <p class="subtitle">Select items to pick from the expo display</p>
+            </div>
+        </div>
+
+        <div class="container">
+            <!-- Status Bar -->
+            <div class="status-bar">
+                <div class="status-indicator">
+                    <div class="status-dot" id="connectionStatus"></div>
+                    <span id="connectionText">Connecting...</span>
+                    <span id="itemCount"></span>
+                </div>
+                <div class="controls">
+                    <button class="btn btn-primary" id="refreshBtn" onclick="refreshItems()">
+                        🔄 Refresh Items
+                    </button>
+                    <button class="btn btn-primary" id="fullscreenBtn" onclick="toggleFullscreen()" title="Toggle Fullscreen (F11)">
+                        ⛶ Fullscreen
+                    </button>
+                </div>
+            </div>
+
+            <!-- Main Card -->
+            <div class="card">
+                <div class="p-3">
+                    <h3 style="color: var(--primary-color); font-weight: 700; margin-bottom: 0;">Available Items</h3>
+                </div>
+                <div id="itemsContainer">
+                    <div class="loading">
+                        <div class="spinner"></div>
+                        <p>Loading items...</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Activity Log Card -->
+            <div class="card">
+                <div class="p-3">
+                    <h3 style="color: var(--primary-color); font-weight: 700; margin-bottom: 1rem;">Activity Log</h3>
+                    <div class="activity-log" id="activityLog">
+                        <div class="log-entry info">
+                            <strong>System:</strong> Connecting to AutoDroid...
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Global Loading Overlay -->
+    <div class="global-loading-overlay" id="globalLoadingOverlay">
+        <div class="global-loading-content">
+            <div class="global-loading-spinner"></div>
+            <div class="global-loading-text" id="globalLoadingText">Picking Item...</div>
+            <div class="global-loading-subtext" id="globalLoadingSubtext">Please wait while AutoDroid processes your request</div>
+        </div>
+    </div>
+
+    <script>
+        // Initialize Socket.IO connection
+        const socket = io();
+        
+        // Global state
+        let items = [];
+        let cachedItems = []; // Cache for fallback when connection issues occur
+        let isConnected = false;
+        let pickingItems = new Set();
+        let isCurrentlyPicking = false;
+
+        // Load cached items from localStorage on page load
+        function loadCachedItems() {
+            try {
+                const cached = localStorage.getItem('autodroid_cached_items');
+                if (cached) {
+                    cachedItems = JSON.parse(cached);
+                    console.log(`📦 Loaded ${cachedItems.length} cached items from storage`);
+                }
+            } catch (e) {
+                console.warn('Failed to load cached items:', e);
+                cachedItems = [];
+            }
+        }
+
+        // Save cached items to localStorage
+        function saveCachedItems() {
+            try {
+                localStorage.setItem('autodroid_cached_items', JSON.stringify(cachedItems));
+                console.log(`💾 Saved ${cachedItems.length} items to cache`);
+            } catch (e) {
+                console.warn('Failed to save cached items:', e);
+            }
+        }
+
+        // Socket event handlers
+        socket.on('connect', function() {
+            console.log('Connected to server');
+            addLogEntry('Connected to web server', 'success');
+        });
+
+        socket.on('disconnect', function() {
+            console.log('Disconnected from server');
+            addLogEntry('Disconnected from web server', 'error');
+            updateConnectionStatus(false);
+        });
+
+        socket.on('connection_status', function(data) {
+            updateConnectionStatus(data.connected);
+        });
+
+        socket.on('items_updated', function(data) {
+            console.log('Items updated:', data);
+            items = data.items;
+            
+            // Cache items for fallback
+            if (items && items.length > 0) {
+                cachedItems = [...items]; // Deep copy for safety
+                saveCachedItems(); // Persist to localStorage
+                console.log(`✅ Cached ${cachedItems.length} items`);
+            }
+            
+            renderItems();
+            updateItemCount(data.total);
+            addLogEntry(`Loaded ${data.total} items`, 'success');
+        });
+
+        socket.on('task_state_update', function(data) {
+            console.log('📡 WebSocket task_state_update received:', data);
+            updateItemStatus(data.task_id, data.state);
+            
+            // Force hide loading on final states as extra safety
+            if (data.state === 'SUCCEED' || data.state === 'FAILED' || data.state === 'FAIL') {
+                console.log('🚫 Force hiding loading due to final state:', data.state);
+                hideGlobalLoading();
+            }
+        });
+
+        socket.on('status_message', function(data) {
+            addLogEntry(data.message, data.type);
+            if (data.type === 'info') {
+                showNotification(data.message, 'info');
+            }
+        });
+
+        // UI Functions
+        function updateConnectionStatus(connected) {
+            isConnected = connected;
+            const statusDot = document.getElementById('connectionStatus');
+            const statusText = document.getElementById('connectionText');
+            
+            if (connected) {
+                statusDot.classList.add('connected');
+                statusText.textContent = 'Connected to AutoDroid';
+            } else {
+                statusDot.classList.remove('connected');
+                statusText.textContent = 'Disconnected';
+            }
+        }
+
+        function updateItemCount(count) {
+            // If we're using cached items, show the cached count
+            const actualCount = items.length === 0 && cachedItems.length > 0 ? cachedItems.length : count;
+            document.getElementById('itemCount').textContent = `(${actualCount} items available)`;
+        }
+
+        function showGlobalLoading(itemName, skuId) {
+            isCurrentlyPicking = true;
+            const overlay = document.getElementById('globalLoadingOverlay');
+            const text = document.getElementById('globalLoadingText');
+            const subtext = document.getElementById('globalLoadingSubtext');
+            
+            text.textContent = `Picking ${itemName}...`;
+            subtext.textContent = `SKU: ${skuId} - Please wait while AutoDroid processes your request`;
+            
+            overlay.style.display = 'flex';
+            console.log('🔄 Loading overlay shown');
+            
+            // Only disable pick buttons, not the entire cards
+            document.querySelectorAll('.pick-button').forEach(btn => {
+                btn.disabled = true;
+            });
+            
+            // Add progressive timeout system
+            // 30 seconds: Show warning but keep loading visible
+            window.warningTimeout = setTimeout(() => {
+                console.log('⚠️ 30s - Showing processing warning but keeping loading active');
+                showNotification('Robot is still processing your request...', 'info');
+                addLogEntry('Robot taking longer than usual - still processing...', 'info');
+                
+                // Update loading text to show extended wait
+                const loadingText = document.getElementById('globalLoadingText');
+                const loadingSubtext = document.getElementById('globalLoadingSubtext');
+                if (loadingText && loadingSubtext) {
+                    loadingText.textContent = 'Robot is working...';
+                    loadingSubtext.textContent = 'Physical picking in progress - please wait up to 2 minutes';
+                }
+            }, 30000);
+            
+            // 2 minutes: Final failsafe timeout
+            window.loadingTimeout = setTimeout(() => {
+                console.log('⏰ 2min timeout - Final failsafe triggered');
+                hideGlobalLoading();
+                showNotification('No response after 2 minutes - you may retry or check robot status', 'warning');
+                addLogEntry('Final timeout after 2 minutes - robot may still be working', 'warning');
+                // Robot may still complete the task and send updates via WebSocket
+            }, 120000); // 2 minutes
+        }
+
+        function hideGlobalLoading() {
+            console.log('🚫 Hiding global loading overlay');
+            
+            isCurrentlyPicking = false;
+            const overlay = document.getElementById('globalLoadingOverlay');
+            
+            if (overlay) {
+                overlay.style.display = 'none';
+                console.log('🚫 Loading overlay hidden');
+            } else {
+                console.error('🚫 ERROR: globalLoadingOverlay element not found!');
+            }
+            
+            // Re-enable all pick buttons
+            document.querySelectorAll('.pick-button').forEach(btn => {
+                btn.disabled = false;
+            });
+            
+            // Clear any existing timeouts
+            if (window.warningTimeout) {
+                clearTimeout(window.warningTimeout);
+                window.warningTimeout = null;
+            }
+            if (window.loadingTimeout) {
+                clearTimeout(window.loadingTimeout);
+                window.loadingTimeout = null;
+            }
+        }
+
+        function renderItems() {
+            const container = document.getElementById('itemsContainer');
+            
+            // Use cached items as fallback if main items array is empty
+            let itemsToRender = items;
+            if (items.length === 0 && cachedItems.length > 0) {
+                console.log('⚡ Using cached items as fallback');
+                itemsToRender = cachedItems;
+                // Show a subtle warning that we're using cached data
+                addLogEntry('Using cached items - connection may be unstable', 'warning');
+            }
+            
+            if (itemsToRender.length === 0) {
+                container.innerHTML = '<div class="loading"><p>No items available</p></div>';
+                return;
+            }
+
+            const itemsHTML = itemsToRender.map((item, index) => {
+                // Extract image filename from img_path
+                let imageUrl = '';
+                if (item.images && item.images.length > 0) {
+                    const imgPath = item.images[0].img_path;
+                    const filename = imgPath.split('/').pop(); // Get filename from path like "/upload/BLACK-G.png"
+                    imageUrl = `/images/${filename}`;
+                }
+
+                const displayName = item.display_name || item.nickname || item.name || item.title || 'Unnamed Item';
+                
+                return `
+                <div class="item-card" id="item-${item.sku_id || item.id}" data-sku="${item.sku_id || item.id}" style="animation-delay: ${8 + (index * 0.1)}s">
+                    <div class="status-overlay" id="status-${item.sku_id || item.id}" style="display: none;"></div>
+                    ${imageUrl ? `<div class="item-image"><img src="${imageUrl}" alt="${displayName}" onerror="this.style.display='none'"></div>` : ''}
+                    <div class="item-sku">SKU: ${item.sku_id || item.id}</div>
+                    <div class="item-name">
+                        <span class="item-name-text" id="name-text-${item.sku_id || item.id}" onclick="editItemName(${item.sku_id || item.id})">${displayName}</span>
+                        <button class="edit-btn" onclick="editItemName(${item.sku_id || item.id})" title="Edit name">✏️</button>
+                    </div>
+                    <div class="item-details">
+                        ${item.spu_type ? `<strong>Type:</strong> ${item.spu_type}<br>` : ''}
+                        ${item.spu_height ? `<strong>Dimensions:</strong> ${item.spu_len}×${item.spu_width}×${item.spu_height}m<br>` : ''}
+                        ${item.sku_price && item.sku_price !== "0" ? `<strong>Price:</strong> $${item.sku_price}` : ''}
+                    </div>
+                    <button class="pick-button" onclick="pickItem(${item.sku_id || item.id})" 
+                            id="btn-${item.sku_id || item.id}">
+                        🛒 Pick This Item
+                    </button>
+                </div>
+            `;
+            }).join('');
+
+            container.innerHTML = `<div class="items-grid">${itemsHTML}</div>`;
+        }
+
+        function pickItem(skuId) {
+            if (!isConnected) {
+                showNotification('Not connected to AutoDroid', 'error');
+                return;
+            }
+
+            if (isCurrentlyPicking) {
+                showNotification('Please wait - another item is being picked', 'warning');
+                return;
+            }
+
+            if (pickingItems.has(skuId)) {
+                showNotification('Item already being picked', 'info');
+                return;
+            }
+
+            // Find the item name for the loading display
+            const item = items.find(item => (item.sku_id || item.id) == skuId);
+            const itemName = item ? (item.display_name || item.nickname || item.name || item.title || 'Item') : 'Item';
+
+            pickingItems.add(skuId);
+            showGlobalLoading(itemName, skuId);
+            updateItemPickingState(skuId, 'picking');
+            addLogEntry(`Picking item ${itemName} (SKU ${skuId})...`, 'info');
+
+            fetch('/api/pick_item', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    sku_id: skuId,
+                    quantity: 1
+                })
+            })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                return response.json();
+            })
+            .then(data => {
+                if (data.success) {
+                    addLogEntry(`Pick request sent for ${itemName} (SKU ${skuId})`, 'success');
+                    showNotification(`Pick request sent for ${itemName}`, 'success');
+                    // Keep loading overlay visible until we get the final status via WebSocket
+                } else {
+                    addLogEntry(`Failed to pick ${itemName} (SKU ${skuId}): ${data.error}`, 'error');
+                    showNotification(`Failed to pick item: ${data.error}`, 'error');
+                    pickingItems.delete(skuId);
+                    updateItemPickingState(skuId, 'normal');
+                    hideGlobalLoading();
+                }
+            })
+            .catch(error => {
+                console.error('Error picking item:', error);
+                addLogEntry(`Error picking ${itemName} (SKU ${skuId}): Network error - ${error.message}`, 'error');
+                showNotification(`Network error: ${error.message}`, 'error');
+                pickingItems.delete(skuId);
+                updateItemPickingState(skuId, 'normal');
+                hideGlobalLoading();
+            });
+        }
+
+        function updateItemPickingState(skuId, state) {
+            const itemCard = document.getElementById(`item-${skuId}`);
+            const statusOverlay = document.getElementById(`status-${skuId}`);
+            const button = document.getElementById(`btn-${skuId}`);
+
+            if (!itemCard) return;
+
+            // Reset classes
+            itemCard.className = 'item-card';
+            statusOverlay.style.display = 'none';
+            button.disabled = false;
+            button.textContent = '🛒 Pick This Item';
+
+            switch (state) {
+                case 'picking':
+                    itemCard.classList.add('picking');
+                    statusOverlay.style.display = 'block';
+                    statusOverlay.className = 'status-overlay picking';
+                    statusOverlay.textContent = 'Picking...';
+                    button.disabled = true;
+                    button.textContent = '⏳ Picking...';
+                    break;
+                case 'success':
+                    itemCard.classList.add('success');
+                    statusOverlay.style.display = 'block';
+                    statusOverlay.className = 'status-overlay success';
+                    statusOverlay.textContent = 'Success!';
+                    button.disabled = false;
+                    button.textContent = '✅ Pick Again';
+                    break;
+                case 'failed':
+                    itemCard.classList.add('failed');
+                    statusOverlay.style.display = 'block';
+                    statusOverlay.className = 'status-overlay failed';
+                    statusOverlay.textContent = 'Failed';
+                    button.disabled = false;
+                    button.textContent = '🔄 Try Again';
+                    break;
+            }
+        }
+
+        function updateItemStatus(taskId, state) {
+            console.log(`🔄 Task ${taskId}: ${state}`);
+            console.log(`🔍 State check - SUCCEED: ${state === 'SUCCEED'}, FAILED: ${state === 'FAILED'}, FAIL: ${state === 'FAIL'}`);
+            
+            // Hide global loading and show notification on final states
+            if (state === 'SUCCEED') {
+                console.log('✅ Item picked successfully');
+                hideGlobalLoading();
+                showNotification('Item picked successfully!', 'success');
+                addLogEntry('Item picked successfully!', 'success');
+                
+                // Clear the "still processing" state
+                isCurrentlyPicking = false;
+                
+            } else if (state === 'FAILED' || state === 'FAIL') {
+                console.log('❌ Item picking failed');
+                hideGlobalLoading();
+                showNotification('Item picking failed', 'error');
+                addLogEntry('Item picking failed', 'error');
+                
+                // Clear the "still processing" state
+                isCurrentlyPicking = false;
+                
+            } else if (state === 'START') {
+                console.log('🔄 Robot started picking');
+                // Show updated status for robot start
+                const loadingText = document.getElementById('globalLoadingText');
+                const loadingSubtext = document.getElementById('globalLoadingSubtext');
+                if (loadingText && loadingSubtext && isCurrentlyPicking) {
+                    loadingText.textContent = 'Robot is picking item...';
+                    loadingSubtext.textContent = 'Physical picking in progress - please wait';
+                }
+                addLogEntry('Robot started physical picking process', 'info');
+            }
+            
+            // Update visual state for any currently picking items
+            pickingItems.forEach(skuId => {
+                if (state === 'START') {
+                    updateItemPickingState(skuId, 'picking');
+                } else if (state === 'SUCCEED') {
+                    updateItemPickingState(skuId, 'success');
+                    pickingItems.delete(skuId);
+                } else if (state === 'FAILED' || state === 'FAIL') {
+                    updateItemPickingState(skuId, 'failed');
+                    pickingItems.delete(skuId);
+                }
+            });
+        }
+
+        function refreshItems() {
+            socket.emit('refresh_items');
+            addLogEntry('Refreshing items list...', 'info');
+        }
+
+        function editItemName(skuId) {
+            const nameTextElement = document.getElementById(`name-text-${skuId}`);
+            const currentName = nameTextElement.textContent;
+            
+            // Create input element
+            const inputElement = document.createElement('input');
+            inputElement.type = 'text';
+            inputElement.value = currentName;
+            inputElement.className = 'item-name-input';
+            inputElement.id = `name-input-${skuId}`;
+            
+            // Create save button
+            const saveBtn = document.createElement('button');
+            saveBtn.textContent = 'Save';
+            saveBtn.className = 'save-btn';
+            saveBtn.onclick = () => saveItemName(skuId);
+            
+            // Create cancel button
+            const cancelBtn = document.createElement('button');
+            cancelBtn.textContent = 'Cancel';
+            cancelBtn.className = 'cancel-btn';
+            cancelBtn.onclick = () => cancelEditName(skuId, currentName);
+            
+            // Replace the name text with input and buttons
+            const nameContainer = nameTextElement.parentElement;
+            nameContainer.innerHTML = '';
+            nameContainer.appendChild(inputElement);
+            nameContainer.appendChild(saveBtn);
+            nameContainer.appendChild(cancelBtn);
+            
+            // Focus the input and select all text
+            inputElement.focus();
+            inputElement.select();
+            
+            // Handle Enter key to save
+            inputElement.addEventListener('keypress', function(e) {
+                if (e.key === 'Enter') {
+                    saveItemName(skuId);
+                }
+            });
+            
+            // Handle Escape key to cancel
+            inputElement.addEventListener('keydown', function(e) {
+                if (e.key === 'Escape') {
+                    cancelEditName(skuId, currentName);
+                }
+            });
+        }
+
+        function saveItemName(skuId) {
+            const inputElement = document.getElementById(`name-input-${skuId}`);
+            const newName = inputElement.value.trim();
+            
+            if (!newName) {
+                showNotification('Name cannot be empty', 'error');
+                inputElement.focus();
+                return;
+            }
+            
+            // Send update to server
+            fetch('/api/update_name', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    sku_id: skuId,
+                    name: newName
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    addLogEntry(`Updated name for SKU ${skuId} to "${newName}"`, 'success');
+                    showNotification('Name updated successfully!', 'success');
+                    // The items will be updated automatically via WebSocket
+                } else {
+                    addLogEntry(`Failed to update name for SKU ${skuId}: ${data.error}`, 'error');
+                    showNotification(`Failed to update name: ${data.error}`, 'error');
+                    // Revert to original name
+                    cancelEditName(skuId, inputElement.getAttribute('data-original'));
+                }
+            })
+            .catch(error => {
+                console.error('Error updating name:', error);
+                addLogEntry(`Error updating name for SKU ${skuId}: ${error}`, 'error');
+                showNotification('Error updating name', 'error');
+                // Revert to original name
+                cancelEditName(skuId, inputElement.getAttribute('data-original'));
+            });
+        }
+
+        function cancelEditName(skuId, originalName) {
+            const nameContainer = document.querySelector(`#item-${skuId} .item-name`);
+            nameContainer.innerHTML = `
+                <span class="item-name-text" id="name-text-${skuId}" onclick="editItemName(${skuId})">${originalName}</span>
+                <button class="edit-btn" onclick="editItemName(${skuId})" title="Edit name">✏️</button>
+            `;
+        }
+
+        // Fullscreen functions
+        function enterFullscreen() {
+            const elem = document.documentElement;
+            if (elem.requestFullscreen) {
+                elem.requestFullscreen();
+            } else if (elem.webkitRequestFullscreen) { /* Safari */
+                elem.webkitRequestFullscreen();
+            } else if (elem.msRequestFullscreen) { /* IE11 */
+                elem.msRequestFullscreen();
+            }
+        }
+
+        function exitFullscreen() {
+            if (document.exitFullscreen) {
+                document.exitFullscreen();
+            } else if (document.webkitExitFullscreen) { /* Safari */
+                document.webkitExitFullscreen();
+            } else if (document.msExitFullscreen) { /* IE11 */
+                document.msExitFullscreen();
+            }
+        }
+
+        function toggleFullscreen() {
+            if (!document.fullscreenElement && !document.webkitFullscreenElement && !document.msFullscreenElement) {
+                enterFullscreen();
+            } else {
+                exitFullscreen();
+            }
+        }
+
+        function updateFullscreenButton() {
+            const btn = document.getElementById('fullscreenBtn');
+            if (document.fullscreenElement || document.webkitFullscreenElement || document.msFullscreenElement) {
+                btn.innerHTML = '⤵️ Exit Fullscreen';
+                btn.title = 'Exit Fullscreen (F11 or Esc)';
+            } else {
+                btn.innerHTML = '⛶ Fullscreen';
+                btn.title = 'Enter Fullscreen (F11)';
+            }
+        }
+
+        // Listen for fullscreen changes
+        document.addEventListener('fullscreenchange', updateFullscreenButton);
+        document.addEventListener('webkitfullscreenchange', updateFullscreenButton);
+        document.addEventListener('msfullscreenchange', updateFullscreenButton);
+
+        // Keyboard shortcuts
+        document.addEventListener('keydown', function(e) {
+            // F11 for fullscreen toggle
+            if (e.key === 'F11') {
+                e.preventDefault();
+                toggleFullscreen();
+            }
+            // Alt + Enter for fullscreen toggle (alternative)
+            if (e.altKey && e.key === 'Enter') {
+                e.preventDefault();
+                toggleFullscreen();
+            }
+        });
+
+        function addLogEntry(message, type = 'info') {
+            const log = document.getElementById('activityLog');
+            const timestamp = new Date().toLocaleTimeString();
+            
+            const entry = document.createElement('div');
+            entry.className = `log-entry ${type}`;
+            entry.innerHTML = `<strong>${timestamp}:</strong> ${message}`;
+            
+            log.insertBefore(entry, log.firstChild);
+            
+            // Keep only last 50 entries
+            while (log.children.length > 50) {
+                log.removeChild(log.lastChild);
+            }
+        }
+
+        function getLogType(state) {
+            switch (state) {
+                case 'START': return 'info';
+                case 'SUCCEED': return 'success';
+                case 'FAILED':
+                case 'FAIL': return 'error';
+                default: return 'info';
+            }
+        }
+
+        function showNotification(message, type) {
+            const notification = document.createElement('div');
+            notification.className = `notification ${type}`;
+            notification.textContent = message;
+            
+            document.body.appendChild(notification);
+            
+            setTimeout(() => {
+                if (document.body.contains(notification)) {
+                    document.body.removeChild(notification);
+                }
+            }, 5000);
+        }
+
+        // Initialize the page
+        document.addEventListener('DOMContentLoaded', function() {
+            addLogEntry('Page loaded, connecting to AutoDroid...', 'info');
+            
+            // Load cached items immediately
+            loadCachedItems();
+            
+            // If we have cached items, render them while waiting for fresh data
+            if (cachedItems.length > 0) {
+                console.log('🔄 Rendering cached items while waiting for fresh data');
+                items = [...cachedItems]; // Use cached as current items temporarily
+                renderItems();
+                updateItemCount(cachedItems.length);
+                addLogEntry(`Showing ${cachedItems.length} cached items`, 'info');
+            }
+            
+            // Ensure buttons are visible after animations
+            setTimeout(() => {
+                const refreshBtn = document.getElementById('refreshBtn');
+                const fullscreenBtn = document.getElementById('fullscreenBtn');
+                if (refreshBtn) {
+                    refreshBtn.style.opacity = '1';
+                    refreshBtn.style.transform = 'translateY(0)';
+                }
+                if (fullscreenBtn) {
+                    fullscreenBtn.style.opacity = '1';
+                    fullscreenBtn.style.transform = 'translateY(0)';
+                }
+                console.log('🔧 Buttons visibility ensured');
+            }, 7000);
+            
+            // Auto-enter fullscreen mode (kiosk mode) after splash and button animations
+            setTimeout(() => {
+                enterFullscreen();
+                addLogEntry('Entered fullscreen kiosk mode', 'info');
+            }, 7500); // After splash screen and button animations complete
+        });
+    </script>
+</body>
+</html>

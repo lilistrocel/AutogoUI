@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Digital Majlis - Supplier Dashboard</title>
+    <!-- Google Font: JetBrains Mono -->
+    <link rel="preconnect" href="https://fonts.gstatic.com">
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body {
+            background-color: #e5fbfe;
+            font-family: 'JetBrains Mono', monospace;
+            color: #306873;
+        }
+        .navbar {
+            background-color: #ffffff;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .navbar-brand {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .navbar-brand img {
+            height: 51px;
+        }
+        .hero-section {
+            background-color: #ffffff;
+            height: 150px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-bottom: 2rem;
+        }
+        .hero-section h1 {
+            font-weight: 700;
+            font-size: 2rem;
+            margin: 0;
+            color: #5cacae;
+        }
+        .tabs {
+            display: flex;
+            justify-content: center;
+            margin-bottom: 2rem;
+        }
+        .tab {
+            padding: 1rem 2rem;
+            font-weight: 600;
+            color: #306873;
+            cursor: pointer;
+            border-bottom: 3px solid transparent;
+            transition: all 0.2s;
+        }
+        .tab.active {
+            color: #4CB7B1;
+            border-bottom-color: #4CB7B1;
+        }
+        .tab:hover {
+            color: #4CB7B1;
+        }
+        .tab-content {
+            display: none;
+        }
+        .tab-content.active {
+            display: block;
+        }
+        .card {
+            border: none;
+            border-radius: 8px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+            background-color: #ffffff;
+            margin-bottom: 2rem;
+        }
+        .card-header {
+            background-color: #4CB7B1;
+            color: white;
+            font-weight: 600;
+            padding: 1rem;
+            border-radius: 8px 8px 0 0;
+        }
+        .order-info {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.5rem 1rem;
+            border-bottom: 1px solid #e5fbfe;
+        }
+        .order-items {
+            padding: 1rem;
+        }
+        .item-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 0.5rem 0;
+            border-bottom: 1px solid #e5fbfe;
+        }
+        .item-row:last-child {
+            border-bottom: none;
+        }
+        .btn-complete {
+            background-color: #4CB7B1;
+            color: white;
+            border: none;
+            padding: 0.5rem 1rem;
+            border-radius: 4px;
+            font-weight: 600;
+            transition: background-color 0.2s;
+        }
+        .btn-complete:hover {
+            background-color: #3BA39D;
+        }
+        .status-badge {
+            padding: 0.25rem 0.75rem;
+            border-radius: 4px;
+            font-weight: 600;
+            font-size: 0.875rem;
+        }
+        .status-pending {
+            background-color: #ffd700;
+            color: #806c00;
+        }
+        .status-completed {
+            background-color: #4CB7B1;
+            color: white;
+        }
+        @media (max-width: 768px) {
+            .hero-section {
+                min-height: auto;
+                padding: 1.5rem 1rem;
+            }
+            .hero-section h1 {
+                font-size: 1.5rem;
+                margin-bottom: 0.5rem;
+            }
+            .hero-section p {
+                font-size: 0.8rem !important;
+            }
+            .order-info {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 0.5rem;
+            }
+            .tabs {
+                margin-bottom: 1.5rem;
+            }
+            .tab {
+                padding: 0.75rem 1.5rem;
+                font-size: 0.9rem;
+            }
+            .card {
+                margin-bottom: 1.5rem;
+            }
+            .item-row {
+                flex-direction: column;
+                gap: 0.25rem;
+                align-items: flex-start;
+                padding: 0.75rem 0;
+            }
+            .navbar-brand {
+                gap: 5px;
+            }
+            .navbar-brand img {
+                height: 40px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Navbar with Logo -->
+    <nav class="navbar navbar-expand-lg">
+        <div class="container">
+            <a class="navbar-brand" href="#">
+                <img src="{{ url_for('static', filename='images/Llogo.svg') }}" alt="L Logo">
+                <img src="{{ url_for('static', filename='images/Klogo.svg') }}" alt="K Logo">
+            </a>
+        </div>
+    </nav>
+
+    <!-- Hero Section -->
+    <div class="hero-section">
+        <div class="text-center">
+            <h1>Digital Majlis - Supplier Dashboard</h1>
+            <p class="mb-0" style="font-size: 0.9rem; color: #306873; margin-top: 0.5rem;">Managing orders for the immersive afternoon tea experience</p>
+        </div>
+    </div>
+
+    <div class="container">
+        <div class="tabs">
+            <div class="tab active" onclick="switchTab('pending')">Current Tasks</div>
+            <div class="tab" onclick="switchTab('completed')">Completed Tasks</div>
+        </div>
+
+        <div id="pending-tasks" class="tab-content active">
+            {% for order in orders %}
+            {% if order.status == 'pending' %}
+            <div class="card">
+                <div class="card-header">
+                    Order #{{ order.id }}
+                </div>
+                <div class="order-info">
+                    <div>
+                        <strong>Time:</strong> {{ order.timestamp | dubai_time }}
+                    </div>
+                    <div>
+                        <strong>Table:</strong> {{ order.table_number }}
+                    </div>
+                    <div>
+                        <span class="status-badge status-pending">
+                            Pending
+                        </span>
+                    </div>
+                </div>
+                <div class="order-items">
+                    {% for item_id, quantity in order['items'].items() %}
+                    <div class="item-row">
+                        <span>{{ get_item_display_name(item_id) }}</span>
+                        <span>Quantity: {{ quantity }}</span>
+                    </div>
+                    {% endfor %}
+                    {% if order.extra_request %}
+                    <div class="extra-request mt-3 pt-3" style="border-top: 1px solid #e5fbfe;">
+                        <strong>Special Request:</strong>
+                        <p class="mb-0 text-muted">{{ order.extra_request }}</p>
+                    </div>
+                    {% endif %}
+                </div>
+                <div class="p-3 text-end">
+                    <button onclick="completeOrder({{ order.id }})" class="btn-complete">
+                        Mark as Complete
+                    </button>
+                </div>
+            </div>
+            {% endif %}
+            {% endfor %}
+        </div>
+
+        <div id="completed-tasks" class="tab-content">
+            {% for order in orders %}
+            {% if order.status == 'completed' %}
+            <div class="card">
+                <div class="card-header">
+                    Order #{{ order.id }}
+                </div>
+                <div class="order-info">
+                    <div>
+                        <strong>Time:</strong> {{ order.timestamp | dubai_time }}
+                    </div>
+                    <div>
+                        <strong>Table:</strong> {{ order.table_number }}
+                    </div>
+                    <div>
+                        <span class="status-badge status-completed">
+                            Completed
+                        </span>
+                    </div>
+                </div>
+                <div class="order-items">
+                    {% for item_id, quantity in order['items'].items() %}
+                    <div class="item-row">
+                        <span>{{ get_item_display_name(item_id) }}</span>
+                        <span>Quantity: {{ quantity }}</span>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+            {% endfor %}
+        </div>
+
+        <div class="text-center mt-4 mb-5">
+            <a href="{{ url_for('index') }}" class="text-decoration-none" style="color: #4CB7B1;">Back to Menu</a>
+        </div>
+    </div>
+
+    <script>
+        function completeOrder(orderId) {
+            fetch(`/api/complete-order/${orderId}`, {
+                method: 'POST'
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    refreshOrders();
+                } else {
+                    alert('Error completing order: ' + data.error);
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('Error completing order');
+            });
+        }
+
+        function switchTab(status) {
+            // Update tab styles
+            document.querySelectorAll('.tab').forEach(tab => {
+                tab.classList.remove('active');
+            });
+            document.querySelector(`.tab[onclick*='${status}']`).classList.add('active');
+
+            // Show/hide content
+            document.querySelectorAll('.tab-content').forEach(content => {
+                content.classList.remove('active');
+            });
+            document.getElementById(`${status}-tasks`).classList.add('active');
+        }
+
+        function formatDate(dateString) {
+            const date = new Date(dateString);
+            // Convert to Dubai time (UTC+4)
+            const dubaiTime = new Date(date.getTime() + (4 * 60 * 60 * 1000));
+            return dubaiTime.toLocaleString('en-AE', { timeZone: 'Asia/Dubai' });
+        }
+
+        function createOrderCard(order) {
+            const card = document.createElement('div');
+            card.className = 'card';
+            
+            let itemsHtml = '';
+            for (const [itemId, quantity] of Object.entries(order.items)) {
+                const displayName = getItemDisplayName(itemId);
+                itemsHtml += `
+                    <div class="item-row">
+                        <span>${displayName}</span>
+                        <span>Quantity: ${quantity}</span>
+                    </div>
+                `;
+            }
+
+            card.innerHTML = `
+                <div class="card-header">
+                    Order #${order.id}
+                </div>
+                <div class="order-info">
+                    <div>
+                        <strong>Time:</strong> ${formatDate(order.timestamp)}
+                    </div>
+                    <div>
+                        <strong>Table:</strong> ${order.table_number}
+                    </div>
+                    <div>
+                        <span class="status-badge status-${order.status}">
+                            ${order.status.charAt(0).toUpperCase() + order.status.slice(1)}
+                        </span>
+                    </div>
+                </div>
+                <div class="order-items">
+                    ${itemsHtml}
+                    ${order.extra_request ? `
+                        <div class="extra-request mt-3 pt-3" style="border-top: 1px solid #e5fbfe;">
+                            <strong>Special Request:</strong>
+                            <p class="mb-0 text-muted">${order.extra_request}</p>
+                        </div>
+                    ` : ''}
+                </div>
+                ${order.status === 'pending' ? `
+                    <div class="p-3 text-end">
+                        <button onclick="completeOrder(${order.id})" class="btn-complete">
+                            Mark as Complete
+                        </button>
+                    </div>
+                ` : ''}`;
+
+            return card;
+        }
+
+        // Helper function to get item display name
+        function getItemDisplayName(itemId) {
+            const menuItems = {
+                'Coffee & Espresso': {
+                    'single_espresso': {'name': 'Single Espresso', 'arabic': 'إسبريسو مفرد'},
+                    'double_espresso': {'name': 'Double Espresso', 'arabic': 'إسبريسو مزدوج'},
+                    'americano': {'name': 'Americano', 'arabic': 'أمريكانو'},
+                    'cappuccino': {'name': 'Cappuccino', 'arabic': 'كابتشينو'},
+                    'flat_white': {'name': 'Flat White', 'arabic': 'فلات وايت'},
+                    'spanish_latte': {'name': 'Spanish Latte', 'arabic': 'سبانيش لاتيه'}
+                },
+                'Specialty Drinks': {
+                    'rubicon_coconut_water': {'name': 'Rubicon Organic Coconut Water', 'arabic': 'ماء جوز الهند العضوي من روبيكون'},
+                    'vitamin_well_care': {'name': 'Vitamin Well Care Drink', 'arabic': 'مشروب فيتامين ويل – كير'}
+                }
+            };
+
+            for (const category of Object.values(menuItems)) {
+                if (itemId in category) {
+                    const item = category[itemId];
+                    return `${item.name} (${item.arabic})`;
+                }
+            }
+            return itemId;
+        }
+
+        function refreshOrders() {
+            fetch('/api/orders')
+                .then(response => response.json())
+                .then(orders => {
+                    // Clear existing orders
+                    const pendingContainer = document.getElementById('pending-tasks');
+                    const completedContainer = document.getElementById('completed-tasks');
+                    pendingContainer.innerHTML = '';
+                    completedContainer.innerHTML = '';
+
+                    // Add new orders
+                    orders.forEach(order => {
+                        const container = order.status === 'pending' ? pendingContainer : completedContainer;
+                        container.appendChild(createOrderCard(order));
+                    });
+                })
+                .catch(error => {
+                    console.error('Error fetching orders:', error);
+                });
+        }
+
+        // Initial load
+        refreshOrders();
+
+        // Refresh every 5 seconds
+        setInterval(refreshOrders, 5000);
+    </script>
+</body>
+</html>

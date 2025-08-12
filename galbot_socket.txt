@@ -1,0 +1,46 @@
+websocket url: ws://192.168.50.6/ws?type=expo
+get items list: {"op":"call_galbot","request_id":"689200f7-307ab6","service":"/expo/goods/list","args":{"current_page":1,"page_size":48}}
+pick item: {"op":"call_galbot","request_id":"68920130-f51795","service":"/expo/goods/order","args":{"sku_ids":[{"sku_id":27,"quantity":1}]}}
+
+on started pinking item state:
+{
+    "code": 0,
+    "msg": "",
+    "op": "galbot_push",
+    "request_id": "68920130-f51795",
+    "result": true,
+    "service": "/expo/goods/order/states/push",
+    "values": {
+        "states": "START",
+        "task_id": 129
+    }
+}
+
+
+on succeed pick item state:
+{
+    "code": 0,
+    "msg": "",
+    "op": "galbot_push",
+    "request_id": "654566c8-cfa3-4747-a7f2-db40c02355b1",
+    "result": true,
+    "service": "/expo/goods/order/states/push",
+    "values": {
+        "states": "SUCCEED",
+        "task_id": "129"
+    }
+}
+
+on succeed pick item state:
+{
+    "code": 0,
+    "msg": "",
+    "op": "galbot_push",
+    "request_id": "654566c8-cfa3-4747-a7f2-db40c02355b1",
+    "result": true,
+    "service": "/expo/goods/order/states/push",
+    "values": {
+        "states": "FAILED",
+        "task_id": "129"
+    }
+}
