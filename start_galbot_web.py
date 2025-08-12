@@ -11,7 +11,7 @@ This script starts the AutoDroid web interface which provides:
 Usage:
     python start_galbot_web.py
 
-The web interface will be available at: http://localhost:5000
+The web interface will be available at: http://localhost:1987
 """
 
 import sys
@@ -44,7 +44,7 @@ def main():
     print("  ✅ Cool animations and transitions")
     print()
     print("WebSocket Target: ws://192.168.50.6/ws?type=expo")
-    print("Web Interface:    http://localhost:5000")
+    print("Web Interface:    http://localhost:1987")
     print()
     print("="*60)
     print()
@@ -60,7 +60,7 @@ def main():
         print("✅ Background WebSocket task started")
         print("🌐 Starting web server...")
         print()
-        print("Access the web interface at: http://localhost:5000")
+        print("Access the web interface at: http://localhost:1987")
         print("Press Ctrl+C to stop the server")
         print()
         
@@ -68,7 +68,7 @@ def main():
         socketio.run(
             app, 
             host='0.0.0.0', 
-            port=5000, 
+            port=1987, 
             debug=False,  # Set to False for production
             use_reloader=False,  # Prevent double startup
             log_output=True
