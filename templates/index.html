@@ -2,7 +2,10 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
     <title>AutoDroid Item Picker</title>
     <!-- Google Font: JetBrains Mono -->
     <link rel="preconnect" href="https://fonts.gstatic.com">
@@ -826,6 +829,92 @@
             100% { opacity: 1; }
         }
 
+        /* Touch-specific styles */
+        @media (hover: none) and (pointer: coarse) {
+            /* Remove hover effects on touch devices */
+            .item-card:hover {
+                transform: none;
+                box-shadow: var(--shadow);
+                border-color: var(--bg-color);
+            }
+            
+            .pick-button:hover {
+                transform: none;
+                box-shadow: none;
+            }
+            
+            .pick-button::before {
+                display: none;
+            }
+            
+            .edit-btn:hover {
+                background: none;
+                color: var(--primary-color);
+                transform: none;
+            }
+            
+            .btn-primary:hover {
+                background-color: var(--primary-color);
+                transform: none;
+                box-shadow: none;
+            }
+        }
+
+        /* Enhanced touch targets */
+        @media (pointer: coarse) {
+            .pick-button {
+                padding: 1rem;
+                font-size: 1rem;
+                min-height: 48px; /* Minimum touch target size */
+            }
+            
+            .edit-btn {
+                padding: 0.5rem;
+                min-width: 44px;
+                min-height: 44px;
+                font-size: 1rem;
+            }
+            
+            .save-btn, .cancel-btn {
+                padding: 0.5rem 1rem;
+                font-size: 0.9rem;
+                min-height: 44px;
+            }
+            
+            .btn {
+                padding: 1rem 2rem;
+                font-size: 1rem;
+                min-height: 48px;
+            }
+            
+            .item-card {
+                padding: 2rem;
+                margin-bottom: 1rem;
+            }
+            
+            .item-name-text {
+                padding: 0.5rem;
+                min-height: 44px;
+                display: flex;
+                align-items: center;
+            }
+        }
+
+        /* Tablet styles */
+        @media (max-width: 1024px) and (min-width: 769px) {
+            .items-grid {
+                grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+                gap: 1.5rem;
+                padding: 2rem 1.5rem;
+            }
+            
+            .pick-button {
+                padding: 0.875rem;
+                font-size: 0.95rem;
+            }
+        }
+
+        /* Mobile styles */
         @media (max-width: 768px) {
             .splash-title {
                 font-size: 2rem;
@@ -848,17 +937,64 @@
             
             .items-grid {
                 grid-template-columns: 1fr;
-                gap: 1rem;
+                gap: 1.5rem;
                 padding: 1.5rem 1rem;
             }
             
             .controls {
                 flex-direction: column;
                 align-items: center;
+                gap: 1rem;
             }
             
             .navbar-brand img {
                 height: 80px;
+            }
+            
+            .item-card {
+                padding: 1.5rem;
+                border-radius: 12px;
+            }
+            
+            .pick-button {
+                padding: 1rem;
+                font-size: 1rem;
+                border-radius: 8px;
+            }
+            
+            .btn {
+                width: 100%;
+                margin-bottom: 0.5rem;
+            }
+            
+            .status-bar {
+                padding: 1.5rem 1rem;
+            }
+            
+            .activity-log {
+                max-height: 250px;
+                padding: 1rem;
+            }
+        }
+
+        /* Small mobile styles */
+        @media (max-width: 480px) {
+            .item-card {
+                padding: 1rem;
+            }
+            
+            .items-grid {
+                padding: 1rem 0.5rem;
+                gap: 1rem;
+            }
+            
+            .hero-section {
+                padding: 1rem;
+            }
+            
+            .pick-button {
+                font-size: 0.9rem;
+                padding: 0.875rem;
             }
         }
     </style>
@@ -963,6 +1099,8 @@
         let isConnected = false;
         let pickingItems = new Set();
         let isCurrentlyPicking = false;
+        let itemStates = new Map(); // Track item states (picking, success, failed) to persist across re-renders
+        let initialRenderComplete = false; // Flag to prevent unnecessary re-renders after initial load
 
         // Load cached items from localStorage on page load
         function loadCachedItems() {
@@ -1006,6 +1144,12 @@
 
         socket.on('items_updated', function(data) {
             console.log('Items updated:', data);
+            
+            // Check if this is just a name update vs a full reload
+            const isNameUpdate = data.is_name_update || false;
+            const currentItemCount = document.querySelectorAll('.item-card').length;
+            const hasExistingItems = currentItemCount > 0;
+            
             items = data.items;
             
             // Cache items for fallback
@@ -1015,9 +1159,25 @@
                 console.log(`✅ Cached ${cachedItems.length} items`);
             }
             
-            renderItems();
+            // Strict logic: Only re-render if initial render is NOT complete, or if it's a forced refresh
+            const shouldRender = !initialRenderComplete || (!isNameUpdate && !hasExistingItems);
+            
+            if (shouldRender) {
+                console.log('🔄 Full re-render:', !initialRenderComplete ? 'Initial load' : 'Forced refresh');
+                renderItems();
+                addLogEntry(`Loaded ${data.total} items`, 'success');
+            } else {
+                console.log('📝 Skipping re-render - updating in place');
+                if (isNameUpdate) {
+                    updateItemNamesInPlace(data.items);
+                    addLogEntry(`Updated item names`, 'info');
+                } else {
+                    console.log('⚠️ Blocked unnecessary re-render to preserve cards');
+                    addLogEntry(`Items data updated in memory`, 'info');
+                }
+            }
+            
             updateItemCount(data.total);
-            addLogEntry(`Loaded ${data.total} items`, 'success');
         });
 
         socket.on('task_state_update', function(data) {
@@ -1134,6 +1294,23 @@
         function renderItems() {
             const container = document.getElementById('itemsContainer');
             
+            // Save current picking states for ALL items before re-rendering
+            const existingItems = container.querySelectorAll('.item-card');
+            existingItems.forEach(itemCard => {
+                const skuId = itemCard.getAttribute('data-sku');
+                if (skuId) {
+                    // Determine current state based on classes
+                    let currentState = 'normal';
+                    if (itemCard.classList.contains('picking')) currentState = 'picking';
+                    else if (itemCard.classList.contains('success')) currentState = 'success';
+                    else if (itemCard.classList.contains('failed')) currentState = 'failed';
+                    
+                    if (currentState !== 'normal') {
+                        itemStates.set(skuId, currentState);
+                    }
+                }
+            });
+            
             // Use cached items as fallback if main items array is empty
             let itemsToRender = items;
             if (items.length === 0 && cachedItems.length > 0) {
@@ -1182,6 +1359,17 @@
             }).join('');
 
             container.innerHTML = `<div class="items-grid">${itemsHTML}</div>`;
+            
+            // Mark initial render as complete
+            initialRenderComplete = true;
+            
+            // Restore saved picking states after re-rendering
+            itemStates.forEach((state, skuId) => {
+                if (state !== 'normal') {
+                    updateItemPickingState(skuId, state);
+                    console.log(`🔄 Restored state for SKU ${skuId}: ${state}`);
+                }
+            });
         }
 
         function pickItem(skuId) {
@@ -1255,8 +1443,22 @@
 
             if (!itemCard) return;
 
-            // Reset classes
-            itemCard.className = 'item-card';
+            // Update the global state tracking
+            if (state === 'normal') {
+                itemStates.delete(skuId);
+            } else {
+                itemStates.set(skuId, state);
+            }
+
+            // Remove status classes while preserving base classes and all styles
+            itemCard.classList.remove('picking', 'success', 'failed', 'disabled');
+            // Ensure the base class is present
+            if (!itemCard.classList.contains('item-card')) {
+                itemCard.classList.add('item-card');
+            }
+            // Force the final animation state to ensure visibility
+            itemCard.style.opacity = '1';
+            itemCard.style.transform = 'translateY(0) rotateX(0deg)';
             statusOverlay.style.display = 'none';
             button.disabled = false;
             button.textContent = '🛒 Pick This Item';
@@ -1277,6 +1479,14 @@
                     statusOverlay.textContent = 'Success!';
                     button.disabled = false;
                     button.textContent = '✅ Pick Again';
+                    
+                    // Auto-clear success state after 30 seconds
+                    setTimeout(() => {
+                        if (itemStates.get(skuId) === 'success') {
+                            updateItemPickingState(skuId, 'normal');
+                            console.log(`⏰ Auto-cleared success state for SKU ${skuId}`);
+                        }
+                    }, 30000);
                     break;
                 case 'failed':
                     itemCard.classList.add('failed');
@@ -1285,6 +1495,14 @@
                     statusOverlay.textContent = 'Failed';
                     button.disabled = false;
                     button.textContent = '🔄 Try Again';
+                    
+                    // Auto-clear failed state after 60 seconds
+                    setTimeout(() => {
+                        if (itemStates.get(skuId) === 'failed') {
+                            updateItemPickingState(skuId, 'normal');
+                            console.log(`⏰ Auto-cleared failed state for SKU ${skuId}`);
+                        }
+                    }, 60000);
                     break;
             }
         }
@@ -1338,7 +1556,26 @@
             });
         }
 
+        function updateItemNamesInPlace(updatedItems) {
+            // Update item names in place without re-rendering the entire grid
+            updatedItems.forEach(item => {
+                const skuId = item.sku_id || item.id;
+                const nameElement = document.getElementById(`name-text-${skuId}`);
+                if (nameElement) {
+                    const newDisplayName = item.display_name || item.nickname || item.name || item.title || 'Unnamed Item';
+                    nameElement.textContent = newDisplayName;
+                    console.log(`📝 Updated name for SKU ${skuId}: ${newDisplayName}`);
+                }
+            });
+        }
+
         function refreshItems() {
+            // Clear all item states when manually refreshing
+            itemStates.clear();
+            pickingItems.clear();
+            initialRenderComplete = false; // Allow re-render for manual refresh
+            console.log('🔄 Cleared all item states and reset render flag for manual refresh');
+            
             socket.emit('refresh_items');
             addLogEntry('Refreshing items list...', 'info');
         }
@@ -1543,15 +1780,60 @@
             }, 5000);
         }
 
+        // Touch and interaction improvements
+        function addTouchFeedback() {
+            // Add touch feedback for buttons
+            document.addEventListener('touchstart', function(e) {
+                if (e.target.matches('.pick-button, .btn, .edit-btn, .save-btn, .cancel-btn')) {
+                    e.target.style.transform = 'scale(0.95)';
+                }
+            });
+            
+            document.addEventListener('touchend', function(e) {
+                if (e.target.matches('.pick-button, .btn, .edit-btn, .save-btn, .cancel-btn')) {
+                    setTimeout(() => {
+                        e.target.style.transform = '';
+                    }, 100);
+                }
+            });
+            
+            // Prevent double-tap zoom on buttons
+            document.addEventListener('touchend', function(e) {
+                if (e.target.matches('.pick-button, .btn, .edit-btn, .save-btn, .cancel-btn, .item-name-text')) {
+                    e.preventDefault();
+                }
+            });
+            
+            // Add visual feedback for item cards on touch
+            document.addEventListener('touchstart', function(e) {
+                if (e.target.closest('.item-card')) {
+                    const card = e.target.closest('.item-card');
+                    card.style.boxShadow = '0 8px 25px rgba(76,183,177,0.15)';
+                }
+            });
+            
+            document.addEventListener('touchend', function(e) {
+                if (e.target.closest('.item-card')) {
+                    const card = e.target.closest('.item-card');
+                    setTimeout(() => {
+                        card.style.boxShadow = '';
+                    }, 200);
+                }
+            });
+        }
+
         // Initialize the page
         document.addEventListener('DOMContentLoaded', function() {
             addLogEntry('Page loaded, connecting to AutoDroid...', 'info');
+            
+            // Add touch improvements
+            addTouchFeedback();
             
             // Load cached items immediately
             loadCachedItems();
             
             // If we have cached items, render them while waiting for fresh data
-            if (cachedItems.length > 0) {
+            if (cachedItems.length > 0 && !initialRenderComplete) {
                 console.log('🔄 Rendering cached items while waiting for fresh data');
                 items = [...cachedItems]; // Use cached as current items temporarily
                 renderItems();

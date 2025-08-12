@@ -58,6 +58,7 @@ class AutoDroidWebApp:
         self.loop = None
         self.thread = None
         self.should_stop = False
+        self.items_loaded = False  # Flag to track if items have been loaded once
         
     async def connect_and_listen(self):
         """Connect to Galbot WebSocket and start listening"""
@@ -72,8 +73,13 @@ class AutoDroidWebApp:
                     # Emit connection status to frontend
                     socketio.emit('connection_status', {'connected': True})
                     
-                    # Get initial items list
-                    await self.fetch_items_list()
+                    # Get initial items list only on first connection
+                    if not self.items_loaded:
+                        await self.fetch_items_list()
+                        self.items_loaded = True
+                        logger.info("Items loaded on initial connection")
+                    else:
+                        logger.info("Reconnected - skipping item reload (items already loaded)")
                     
                     # Start listening for messages
                     while self.is_connected and not self.should_stop:
@@ -97,10 +103,13 @@ class AutoDroidWebApp:
                 logger.info("Attempting to reconnect in 5 seconds...")
                 await asyncio.sleep(5)
             
-    async def fetch_items_list(self):
+    async def fetch_items_list(self, force_refresh=False):
         """Fetch and store the items list"""
         global available_items
         try:
+            if force_refresh:
+                logger.info("Force refreshing items list...")
+            
             response = await self.client.get_items_list(current_page=1, page_size=100)
             if response and response.get("code") == 0:
                 # Extract items from response - they're in 'rows', not 'items'
@@ -119,7 +128,8 @@ class AutoDroidWebApp:
                 # Emit to frontend
                 socketio.emit('items_updated', {
                     'items': items_with_custom_names,
-                    'total': len(available_items)
+                    'total': len(available_items),
+                    'is_name_update': False
                 })
             else:
                 logger.error(f"Failed to fetch items: {response}")
@@ -346,7 +356,8 @@ def update_item_name():
         
         socketio.emit('items_updated', {
             'items': items_with_custom_names,
-            'total': len(available_items)
+            'total': len(available_items),
+            'is_name_update': True
         })
         
         return jsonify({'success': True, 'message': f'Updated name for SKU {sku_id}'})
@@ -370,7 +381,8 @@ def handle_connect():
         
         emit('items_updated', {
             'items': items_with_custom_names,
-            'total': len(available_items)
+            'total': len(available_items),
+            'is_name_update': False
         })
 
 @socketio.on('disconnect')
@@ -382,16 +394,16 @@ def handle_disconnect():
 def handle_refresh_items():
     """Handle request to refresh items"""
     if autodroid_app.is_connected:
-        # Schedule refresh in the background
+        # Schedule refresh in the background with force_refresh=True
         def refresh_async():
             if autodroid_app.loop:
                 asyncio.run_coroutine_threadsafe(
-                    autodroid_app.fetch_items_list(), 
+                    autodroid_app.fetch_items_list(force_refresh=True), 
                     autodroid_app.loop
                 )
         
         threading.Thread(target=refresh_async, daemon=True).start()
-        emit('status_message', {'message': 'Refreshing items...', 'type': 'info'})
+        emit('status_message', {'message': 'Manually refreshing items...', 'type': 'info'})
     else:
         emit('status_message', {'message': 'Not connected to AutoDroid', 'type': 'error'})
 
