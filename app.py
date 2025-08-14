@@ -94,12 +94,18 @@ def set_robot_state(new_state, task_id=None):
             current_operation_task_id = None
             logger.info(f"🤖 State: {old_state.value} → {new_state.value}")
             
-        # Emit state change to frontend
-        socketio.emit('robot_state_update', {
-            'state': new_state.value,
-            'timestamp': robot_state_timestamp,
-            'task_id': current_operation_task_id
-        })
+        # Emit state change to ALL connected clients
+        try:
+            state_data = {
+                'state': new_state.value,
+                'timestamp': robot_state_timestamp,
+                'task_id': current_operation_task_id,
+                'uptime_seconds': 0
+            }
+            socketio.emit('robot_state_changed', state_data, broadcast=True)
+            logger.info(f"Broadcasted robot state change to all clients: {new_state.value}")
+        except Exception as e:
+            logger.error(f"Error emitting robot state change: {e}")
 
 def timeout_robot_state():
     """Called when the state timeout expires"""
@@ -575,6 +581,10 @@ def handle_connect():
     """Handle client connection"""
     logger.info('Client connected')
     emit('connection_status', {'connected': autodroid_app.is_connected})
+    
+    # Send current robot state
+    current_state = get_robot_state()
+    emit('robot_state_changed', current_state)
     
     # Send current items if available
     if available_items:

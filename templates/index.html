@@ -829,6 +829,54 @@
             100% { opacity: 1; }
         }
 
+        /* Interface disabled state */
+        body.interface-disabled {
+            overflow: hidden;
+            user-select: none;
+            -webkit-user-select: none;
+            -moz-user-select: none;
+            -ms-user-select: none;
+        }
+
+        body.interface-disabled * {
+            pointer-events: none !important;
+            cursor: not-allowed !important;
+        }
+
+        body.interface-disabled .global-loading-overlay {
+            pointer-events: auto !important;
+            cursor: default !important;
+        }
+
+        /* Disabled interaction styles */
+        .disabled-interaction {
+            opacity: 0.6 !important;
+            filter: grayscale(50%) !important;
+            cursor: not-allowed !important;
+        }
+
+        /* Scroll behavior fixes */
+        .item-card {
+            touch-action: manipulation; /* Prevents accidental activation during scroll */
+        }
+
+        .pick-button {
+            touch-action: manipulation;
+            /* Add slight delay to prevent accidental taps during scroll */
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        /* Add scroll buffer zone - prevent accidental button presses */
+        .items-container {
+            padding: 10px 0; /* Extra space at top/bottom for scroll buffer */
+        }
+
+        /* Improve scroll momentum on mobile */
+        .items-container {
+            -webkit-overflow-scrolling: touch;
+            overscroll-behavior: contain;
+        }
+
         /* Touch-specific styles */
         @media (hover: none) and (pointer: coarse) {
             /* Remove hover effects on touch devices */
@@ -1128,6 +1176,10 @@
             }
         }
 
+        // Global robot state tracking
+        let currentRobotState = 'idle';
+        let isInterfaceDisabled = false;
+
         // Socket event handlers
         socket.on('connect', function() {
             console.log('Connected to server');
@@ -1197,6 +1249,27 @@
             addLogEntry(data.message, data.type);
             if (data.type === 'info') {
                 showNotification(data.message, 'info');
+            }
+        });
+
+        // Robot state change handler - shows/hides loading widget
+        socket.on('robot_state_changed', function(data) {
+            console.log('🤖 Robot state changed:', data);
+            const previousState = currentRobotState;
+            currentRobotState = data.state;
+            
+            if (data.state === 'operating') {
+                // Show loading widget and disable interface
+                showRobotOperatingMode();
+                addLogEntry('Robot is operating - interface disabled', 'info');
+            } else if (data.state === 'idle' && previousState === 'operating') {
+                // Hide loading widget and enable interface
+                hideRobotOperatingMode();
+                addLogEntry('Robot operation completed - interface enabled', 'success');
+            } else if (data.state === 'failed') {
+                addLogEntry('Robot operation failed', 'error');
+            } else if (data.state === 'succeeded') {
+                addLogEntry('Robot operation succeeded', 'success');
             }
         });
 
@@ -1293,6 +1366,81 @@
             }
         }
 
+        // Robot operating mode functions - manages global interface state
+        function showRobotOperatingMode() {
+            console.log('🤖 Entering robot operating mode - disabling interface');
+            isInterfaceDisabled = true;
+            
+            const overlay = document.getElementById('globalLoadingOverlay');
+            const text = document.getElementById('globalLoadingText');
+            const subtext = document.getElementById('globalLoadingSubtext');
+            
+            // Update loading text for robot operating mode
+            text.textContent = 'Robot is Operating...';
+            subtext.textContent = 'Please wait while the robot completes the current task';
+            
+            // Show overlay
+            overlay.style.display = 'flex';
+            
+            // Add interface blocking class to body
+            document.body.classList.add('interface-disabled');
+            
+            // Disable all interactive elements
+            disableAllInteractions();
+        }
+
+        function hideRobotOperatingMode() {
+            console.log('🤖 Exiting robot operating mode - enabling interface');
+            isInterfaceDisabled = false;
+            
+            const overlay = document.getElementById('globalLoadingOverlay');
+            overlay.style.display = 'none';
+            
+            // Remove interface blocking class from body
+            document.body.classList.remove('interface-disabled');
+            
+            // Re-enable all interactive elements
+            enableAllInteractions();
+        }
+
+        function disableAllInteractions() {
+            // Disable all buttons
+            document.querySelectorAll('button').forEach(btn => {
+                btn.disabled = true;
+                btn.style.pointerEvents = 'none';
+            });
+            
+            // Disable all inputs
+            document.querySelectorAll('input').forEach(input => {
+                input.disabled = true;
+            });
+            
+            // Disable item cards
+            document.querySelectorAll('.item-card').forEach(card => {
+                card.style.pointerEvents = 'none';
+                card.classList.add('disabled-interaction');
+            });
+        }
+
+        function enableAllInteractions() {
+            // Re-enable all buttons
+            document.querySelectorAll('button').forEach(btn => {
+                btn.disabled = false;
+                btn.style.pointerEvents = '';
+            });
+            
+            // Re-enable all inputs
+            document.querySelectorAll('input').forEach(input => {
+                input.disabled = false;
+            });
+            
+            // Re-enable item cards
+            document.querySelectorAll('.item-card').forEach(card => {
+                card.style.pointerEvents = '';
+                card.classList.remove('disabled-interaction');
+            });
+        }
+
         function renderItems() {
             const container = document.getElementById('itemsContainer');
             
@@ -1375,6 +1523,12 @@
         }
 
         function pickItem(skuId) {
+            // Check if interface is disabled (robot operating)
+            if (isInterfaceDisabled) {
+                showNotification('Robot is currently operating - please wait', 'warning');
+                return;
+            }
+
             if (!isConnected) {
                 showNotification('Not connected to AutoDroid', 'error');
                 return;
@@ -1784,18 +1938,51 @@
 
         // Touch and interaction improvements
         function addTouchFeedback() {
-            // Add touch feedback for buttons
+            // Enhanced touch handling with scroll detection
+            let touchStartY = 0;
+            let touchStartTime = 0;
+            let isScrolling = false;
+            let touchStartTarget = null;
+
             document.addEventListener('touchstart', function(e) {
+                touchStartY = e.touches[0].clientY;
+                touchStartTime = Date.now();
+                isScrolling = false;
+                touchStartTarget = e.target;
+                
+                // Add visual feedback for buttons
                 if (e.target.matches('.pick-button, .btn, .edit-btn, .save-btn, .cancel-btn')) {
                     e.target.style.transform = 'scale(0.95)';
                 }
             });
+
+            document.addEventListener('touchmove', function(e) {
+                const touchMoveY = e.touches[0].clientY;
+                const deltaY = Math.abs(touchMoveY - touchStartY);
+                
+                // If touch moved more than 10px vertically, consider it scrolling
+                if (deltaY > 10) {
+                    isScrolling = true;
+                    // Remove visual feedback if scrolling
+                    if (touchStartTarget && touchStartTarget.matches('.pick-button, .btn, .edit-btn, .save-btn, .cancel-btn')) {
+                        touchStartTarget.style.transform = '';
+                    }
+                }
+            });
             
             document.addEventListener('touchend', function(e) {
+                const touchDuration = Date.now() - touchStartTime;
+                
+                // Reset visual feedback
                 if (e.target.matches('.pick-button, .btn, .edit-btn, .save-btn, .cancel-btn')) {
                     setTimeout(() => {
                         e.target.style.transform = '';
                     }, 100);
+                }
+                
+                // Ignore touch events if we were scrolling or touch was too long
+                if (isScrolling || touchDuration > 500) {
+                    return;
                 }
             });
             
@@ -1803,6 +1990,13 @@
             document.addEventListener('touchend', function(e) {
                 const target = e.target;
                 console.log('Touch end on:', target.className, target.id);
+                
+                // Skip if we were scrolling or interface is disabled
+                const touchDuration = Date.now() - touchStartTime;
+                if (isScrolling || touchDuration > 500 || isInterfaceDisabled) {
+                    console.log('Touch ignored:', { isScrolling, touchDuration, isInterfaceDisabled });
+                    return;
+                }
                 
                 // Handle pick buttons
                 if (target.classList.contains('pick-button')) {
