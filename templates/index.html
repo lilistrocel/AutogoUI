@@ -629,6 +629,278 @@
             font-size: 0.9rem;
         }
 
+        /* Confirmation Popup Styles */
+        .confirmation-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: rgba(0, 0, 0, 0.7);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 10001;
+            backdrop-filter: blur(3px);
+            animation: overlayFadeIn 0.3s ease-out;
+        }
+
+        .confirmation-popup {
+            background: var(--card-bg);
+            border-radius: 15px;
+            padding: 0;
+            max-width: 400px;
+            width: 90%;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+            animation: modalBounceIn 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            overflow: hidden;
+        }
+
+        .confirmation-header {
+            background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+            color: white;
+            padding: 20px;
+            text-align: center;
+        }
+
+        .confirmation-header h4 {
+            margin: 0;
+            font-weight: 700;
+            font-size: 1.1rem;
+        }
+
+        .confirmation-body {
+            padding: 25px;
+        }
+
+        .confirmation-item-info {
+            display: flex;
+            align-items: center;
+            margin-bottom: 20px;
+            padding: 15px;
+            background: var(--bg-color);
+            border-radius: 10px;
+            border: 2px solid var(--primary-color);
+        }
+
+        .confirmation-item-image {
+            width: 60px;
+            height: 60px;
+            object-fit: cover;
+            border-radius: 8px;
+            margin-right: 15px;
+            border: 2px solid var(--secondary-color);
+        }
+
+        .confirmation-item-details {
+            flex: 1;
+        }
+
+        .confirmation-item-name {
+            font-weight: 700;
+            font-size: 1.1rem;
+            color: var(--text-color);
+            margin-bottom: 5px;
+        }
+
+        .confirmation-item-sku {
+            font-size: 0.9rem;
+            color: var(--secondary-color);
+            font-weight: 600;
+        }
+
+        .confirmation-message {
+            text-align: center;
+            color: var(--text-color);
+            font-weight: 600;
+            margin: 0;
+            font-size: 1rem;
+        }
+
+        .confirmation-actions {
+            display: flex;
+            gap: 10px;
+            margin-top: 25px;
+        }
+
+        .btn-cancel, .btn-confirm {
+            flex: 1;
+            padding: 12px 20px;
+            border: none;
+            border-radius: 8px;
+            font-weight: 700;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        .btn-cancel {
+            background: #e0e0e0;
+            color: #666;
+        }
+
+        .btn-cancel:hover {
+            background: #d0d0d0;
+            transform: translateY(-2px);
+        }
+
+        .btn-confirm {
+            background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+            color: white;
+        }
+
+        .btn-confirm:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 15px rgba(76, 183, 177, 0.4);
+        }
+
+        /* Touch feedback for confirmation buttons */
+        .btn-cancel:active, .btn-confirm:active {
+            transform: scale(0.95);
+        }
+
+        /* Mobile responsiveness for confirmation popup */
+        @media (max-width: 480px) {
+            .confirmation-popup {
+                width: 95%;
+                margin: 10px;
+            }
+            
+            .confirmation-item-info {
+                flex-direction: column;
+                text-align: center;
+            }
+            
+            .confirmation-item-image {
+                margin-right: 0;
+                margin-bottom: 10px;
+            }
+            
+            .confirmation-actions {
+                flex-direction: column;
+            }
+        }
+
+        /* Loading Reset Button Styles */
+        .global-loading-actions {
+            margin-top: 25px;
+        }
+
+        .loading-reset-btn {
+            background: linear-gradient(135deg, #ff6b6b, #ff5252);
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 8px;
+            font-weight: 600;
+            font-size: 0.9rem;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-family: 'JetBrains Mono', monospace;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin: 0 auto;
+        }
+
+        .loading-reset-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 15px rgba(255, 107, 107, 0.4);
+            background: linear-gradient(135deg, #ff5252, #f44336);
+        }
+
+        .loading-reset-btn:active {
+            transform: scale(0.95);
+        }
+
+        .loading-reset-btn svg {
+            animation: resetSpin 2s linear infinite;
+        }
+
+        @keyframes resetSpin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+
+        /* Reset Confirmation Popup Styles */
+        .reset-confirmation {
+            border: 2px solid #ff6b6b;
+        }
+
+        .reset-header {
+            background: linear-gradient(135deg, #ff6b6b, #ff5252);
+        }
+
+        .reset-warning {
+            display: flex;
+            align-items: flex-start;
+            gap: 15px;
+            padding: 20px;
+            background: #fff3e0;
+            border-radius: 10px;
+            border-left: 4px solid #ff9800;
+            margin-bottom: 15px;
+        }
+
+        .warning-icon {
+            font-size: 2rem;
+            color: #ff9800;
+            flex-shrink: 0;
+        }
+
+        .warning-text p {
+            margin: 0 0 10px 0;
+            color: var(--text-color);
+            line-height: 1.4;
+        }
+
+        .warning-text p:last-child {
+            margin-bottom: 0;
+        }
+
+        .warning-note {
+            font-size: 0.85rem !important;
+            color: #ff6b6b !important;
+            font-weight: 600 !important;
+            font-style: italic;
+        }
+
+        .btn-reset {
+            background: linear-gradient(135deg, #ff6b6b, #ff5252);
+            color: white;
+            flex: 1;
+            padding: 12px 20px;
+            border: none;
+            border-radius: 8px;
+            font-weight: 700;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        .btn-reset:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 15px rgba(255, 107, 107, 0.4);
+        }
+
+        .btn-reset:active {
+            transform: scale(0.95);
+        }
+
+        /* Reset confirmation mobile responsiveness */
+        @media (max-width: 480px) {
+            .reset-warning {
+                flex-direction: column;
+                text-align: center;
+            }
+            
+            .warning-icon {
+                align-self: center;
+            }
+        }
+
         /* Animations */
         @keyframes fadeOut {
             to {
@@ -843,7 +1115,14 @@
             cursor: not-allowed !important;
         }
 
-        body.interface-disabled .global-loading-overlay {
+        body.interface-disabled .global-loading-overlay,
+        body.interface-disabled .confirmation-overlay {
+            pointer-events: auto !important;
+            cursor: default !important;
+        }
+
+        body.interface-disabled .confirmation-overlay *,
+        body.interface-disabled .global-loading-overlay * {
             pointer-events: auto !important;
             cursor: default !important;
         }
@@ -1136,6 +1415,61 @@
             <div class="global-loading-spinner"></div>
             <div class="global-loading-text" id="globalLoadingText">Picking Item...</div>
             <div class="global-loading-subtext" id="globalLoadingSubtext">Please wait while AutoDroid processes your request</div>
+            <div class="global-loading-actions">
+                <button class="loading-reset-btn" id="loadingResetBtn">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
+                        <path d="M3 3v5h5"/>
+                    </svg>
+                    Reset Robot State
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Confirmation Popup -->
+    <div class="confirmation-overlay" id="confirmationOverlay">
+        <div class="confirmation-popup">
+            <div class="confirmation-header">
+                <h4>Confirm Pick Item</h4>
+            </div>
+            <div class="confirmation-body">
+                <div class="confirmation-item-info">
+                    <img id="confirmationItemImage" src="" alt="Item" class="confirmation-item-image">
+                    <div class="confirmation-item-details">
+                        <div class="confirmation-item-name" id="confirmationItemName">Item Name</div>
+                        <div class="confirmation-item-sku">SKU: <span id="confirmationItemSku">123</span></div>
+                    </div>
+                </div>
+                <p class="confirmation-message">Are you sure you want to pick this item?</p>
+            </div>
+            <div class="confirmation-actions">
+                <button class="btn-cancel" id="confirmationCancel">Cancel</button>
+                <button class="btn-confirm" id="confirmationConfirm">Pick Item</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Reset Confirmation Popup -->
+    <div class="confirmation-overlay" id="resetConfirmationOverlay">
+        <div class="confirmation-popup reset-confirmation">
+            <div class="confirmation-header reset-header">
+                <h4>⚠️ Reset Robot State</h4>
+            </div>
+            <div class="confirmation-body">
+                <div class="reset-warning">
+                    <div class="warning-icon">⚠️</div>
+                    <div class="warning-text">
+                        <p><strong>Are you sure you want to reset the robot state?</strong></p>
+                        <p>This will force the robot back to IDLE state and may interrupt any ongoing operation.</p>
+                        <p class="warning-note">Only use this if you're certain the robot didn't receive the command.</p>
+                    </div>
+                </div>
+            </div>
+            <div class="confirmation-actions">
+                <button class="btn-cancel" id="resetConfirmationCancel">Cancel</button>
+                <button class="btn-reset" id="resetConfirmationConfirm">Reset State</button>
+            </div>
         </div>
     </div>
 
@@ -1292,6 +1626,192 @@
             // If we're using cached items, show the cached count
             const actualCount = items.length === 0 && cachedItems.length > 0 ? cachedItems.length : count;
             document.getElementById('itemCount').textContent = `(${actualCount} items available)`;
+        }
+
+        // Confirmation popup functions
+        function showConfirmationPopup(skuId) {
+            // Check if interface is disabled
+            if (isInterfaceDisabled) {
+                showNotification('Robot is currently operating - please wait', 'warning');
+                return false;
+            }
+
+            // Find the item details
+            const item = items.find(item => (item.sku_id || item.id) == skuId);
+            if (!item) {
+                showNotification('Item not found', 'error');
+                return false;
+            }
+
+            const overlay = document.getElementById('confirmationOverlay');
+            const itemImage = document.getElementById('confirmationItemImage');
+            const itemName = document.getElementById('confirmationItemName');
+            const itemSku = document.getElementById('confirmationItemSku');
+            const confirmBtn = document.getElementById('confirmationConfirm');
+            const cancelBtn = document.getElementById('confirmationCancel');
+
+            // Populate item details
+            const displayName = item.display_name || item.nickname || item.name || item.title || 'Unknown Item';
+            const imagePath = `/static/images/${item.image}` || '/static/images/default.png';
+            
+            itemName.textContent = displayName;
+            itemSku.textContent = item.sku_id || item.id;
+            itemImage.src = imagePath;
+            itemImage.onerror = function() {
+                this.style.display = 'none';
+            };
+
+            // Show overlay
+            overlay.style.display = 'flex';
+
+            // Return promise that resolves with user choice
+            return new Promise((resolve) => {
+                // Handle confirm button
+                const confirmHandler = () => {
+                    overlay.style.display = 'none';
+                    confirmBtn.removeEventListener('click', confirmHandler);
+                    cancelBtn.removeEventListener('click', cancelHandler);
+                    document.removeEventListener('keydown', keyHandler);
+                    resolve(true);
+                };
+
+                // Handle cancel button
+                const cancelHandler = () => {
+                    overlay.style.display = 'none';
+                    confirmBtn.removeEventListener('click', confirmHandler);
+                    cancelBtn.removeEventListener('click', cancelHandler);
+                    document.removeEventListener('keydown', keyHandler);
+                    resolve(false);
+                };
+
+                // Handle keyboard (Enter = confirm, Escape = cancel)
+                const keyHandler = (e) => {
+                    if (e.key === 'Enter') {
+                        confirmHandler();
+                    } else if (e.key === 'Escape') {
+                        cancelHandler();
+                    }
+                };
+
+                // Add event listeners
+                confirmBtn.addEventListener('click', confirmHandler);
+                cancelBtn.addEventListener('click', cancelHandler);
+                document.addEventListener('keydown', keyHandler);
+
+                // Focus on confirm button for keyboard accessibility
+                setTimeout(() => confirmBtn.focus(), 100);
+            });
+        }
+
+        // Reset confirmation popup functions
+        function showResetConfirmationPopup() {
+            const overlay = document.getElementById('resetConfirmationOverlay');
+            const confirmBtn = document.getElementById('resetConfirmationConfirm');
+            const cancelBtn = document.getElementById('resetConfirmationCancel');
+
+            // Show overlay
+            overlay.style.display = 'flex';
+
+            // Return promise that resolves with user choice
+            return new Promise((resolve) => {
+                // Handle confirm button
+                const confirmHandler = () => {
+                    overlay.style.display = 'none';
+                    confirmBtn.removeEventListener('click', confirmHandler);
+                    cancelBtn.removeEventListener('click', cancelHandler);
+                    document.removeEventListener('keydown', keyHandler);
+                    resolve(true);
+                };
+
+                // Handle cancel button
+                const cancelHandler = () => {
+                    overlay.style.display = 'none';
+                    confirmBtn.removeEventListener('click', confirmHandler);
+                    cancelBtn.removeEventListener('click', cancelHandler);
+                    document.removeEventListener('keydown', keyHandler);
+                    resolve(false);
+                };
+
+                // Handle keyboard (Enter = confirm, Escape = cancel)
+                const keyHandler = (e) => {
+                    if (e.key === 'Enter') {
+                        confirmHandler();
+                    } else if (e.key === 'Escape') {
+                        cancelHandler();
+                    }
+                };
+
+                // Add event listeners
+                confirmBtn.addEventListener('click', confirmHandler);
+                cancelBtn.addEventListener('click', cancelHandler);
+                document.addEventListener('keydown', keyHandler);
+
+                // Focus on cancel button by default for safety
+                setTimeout(() => cancelBtn.focus(), 100);
+            });
+        }
+
+        async function handleResetButtonClick() {
+            try {
+                const confirmed = await showResetConfirmationPopup();
+                
+                if (confirmed) {
+                    // User confirmed, proceed with reset
+                    executeRobotStateReset();
+                } else {
+                    // User cancelled
+                    addLogEntry('Robot state reset cancelled', 'info');
+                }
+            } catch (error) {
+                console.error('Error showing reset confirmation:', error);
+                showNotification('Error showing reset confirmation dialog', 'error');
+            }
+        }
+
+        function executeRobotStateReset() {
+            addLogEntry('Manually resetting robot state to IDLE...', 'info');
+            showNotification('Resetting robot state...', 'info');
+
+            fetch('/api/robot/reset', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                }
+            })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                return response.json();
+            })
+            .then(data => {
+                if (data.success) {
+                    addLogEntry('Robot state successfully reset to IDLE', 'success');
+                    showNotification('Robot state reset successfully', 'success');
+                    
+                    // Hide loading overlay and re-enable interface
+                    hideRobotOperatingMode();
+                    hideGlobalLoading();
+                    
+                    // Clear any picking states
+                    pickingItems.clear();
+                    itemStates.clear();
+                    isCurrentlyPicking = false;
+                    
+                    // Update all item cards to normal state
+                    document.querySelectorAll('.item-card').forEach(card => {
+                        const skuId = card.id.replace('item-', '');
+                        updateItemPickingState(parseInt(skuId), 'normal');
+                    });
+                } else {
+                    throw new Error(data.error || 'Unknown error');
+                }
+            })
+            .catch(error => {
+                console.error('Error resetting robot state:', error);
+                addLogEntry(`Error resetting robot state: ${error.message}`, 'error');
+                showNotification(`Failed to reset: ${error.message}`, 'error');
+            });
         }
 
         function showGlobalLoading(itemName, skuId) {
@@ -1522,7 +2042,8 @@
             });
         }
 
-        function pickItem(skuId) {
+        // Main pickItem function - shows confirmation first
+        async function pickItem(skuId) {
             // Check if interface is disabled (robot operating)
             if (isInterfaceDisabled) {
                 showNotification('Robot is currently operating - please wait', 'warning');
@@ -1544,6 +2065,25 @@
                 return;
             }
 
+            // Show confirmation popup and wait for user response
+            try {
+                const confirmed = await showConfirmationPopup(skuId);
+                
+                if (confirmed) {
+                    // User confirmed, proceed with picking
+                    executePickItem(skuId);
+                } else {
+                    // User cancelled
+                    addLogEntry(`Pick cancelled for SKU ${skuId}`, 'info');
+                }
+            } catch (error) {
+                console.error('Error showing confirmation:', error);
+                showNotification('Error showing confirmation dialog', 'error');
+            }
+        }
+
+        // Actual pick execution function
+        function executePickItem(skuId) {
             // Find the item name for the loading display
             const item = items.find(item => (item.sku_id || item.id) == skuId);
             const itemName = item ? (item.display_name || item.nickname || item.name || item.title || 'Item') : 'Item';
@@ -1951,7 +2491,7 @@
                 touchStartTarget = e.target;
                 
                 // Add visual feedback for buttons
-                if (e.target.matches('.pick-button, .btn, .edit-btn, .save-btn, .cancel-btn')) {
+                if (e.target.matches('.pick-button, .btn, .edit-btn, .save-btn, .cancel-btn, .btn-cancel, .btn-confirm, .loading-reset-btn, .btn-reset')) {
                     e.target.style.transform = 'scale(0.95)';
                 }
             });
@@ -1964,7 +2504,7 @@
                 if (deltaY > 10) {
                     isScrolling = true;
                     // Remove visual feedback if scrolling
-                    if (touchStartTarget && touchStartTarget.matches('.pick-button, .btn, .edit-btn, .save-btn, .cancel-btn')) {
+                    if (touchStartTarget && touchStartTarget.matches('.pick-button, .btn, .edit-btn, .save-btn, .cancel-btn, .btn-cancel, .btn-confirm, .loading-reset-btn, .btn-reset')) {
                         touchStartTarget.style.transform = '';
                     }
                 }
@@ -1974,7 +2514,7 @@
                 const touchDuration = Date.now() - touchStartTime;
                 
                 // Reset visual feedback
-                if (e.target.matches('.pick-button, .btn, .edit-btn, .save-btn, .cancel-btn')) {
+                if (e.target.matches('.pick-button, .btn, .edit-btn, .save-btn, .cancel-btn, .btn-cancel, .btn-confirm, .loading-reset-btn, .btn-reset')) {
                     setTimeout(() => {
                         e.target.style.transform = '';
                     }, 100);
@@ -2043,6 +2583,12 @@
                     target.click(); // Trigger the original click handler
                 }
                 
+                // Handle reset button
+                if (target.id === 'loadingResetBtn' || target.classList.contains('loading-reset-btn')) {
+                    e.preventDefault();
+                    handleResetButtonClick();
+                }
+                
                 // Handle item name text
                 if (target.classList.contains('item-name-text')) {
                     e.preventDefault();
@@ -2080,6 +2626,12 @@
             
             // Add touch improvements
             addTouchFeedback();
+            
+            // Add reset button event listener
+            const resetBtn = document.getElementById('loadingResetBtn');
+            if (resetBtn) {
+                resetBtn.addEventListener('click', handleResetButtonClick);
+            }
             
             // Load cached items immediately
             loadCachedItems();
