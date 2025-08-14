@@ -5,11 +5,20 @@ import json
 import logging
 import threading
 import os
+import time
+from enum import Enum
 from galbot_websocket_client import GalbotWebSocketClient
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+# Robot state management
+class RobotState(Enum):
+    IDLE = "idle"
+    OPERATING = "operating"
+    FAILED = "failed"
+    SUCCEEDED = "succeeded"
 
 # Flask app setup
 app = Flask(__name__)
@@ -22,6 +31,14 @@ available_items = []
 current_tasks = {}
 custom_names = {}  # Store custom display names
 CUSTOM_NAMES_FILE = 'custom_names.json'
+
+# Robot state tracking
+robot_state = RobotState.IDLE
+robot_state_timestamp = time.time()
+robot_state_lock = threading.Lock()
+current_operation_task_id = None
+state_timeout_timer = None
+STATE_TIMEOUT_SECONDS = 180  # 3 minutes
 
 def load_custom_names():
     """Load custom display names from file"""
@@ -50,6 +67,63 @@ def get_display_name(item):
     """Get the display name for an item (custom name if set, otherwise original)"""
     sku_id = str(item.get('sku_id', item.get('id', '')))
     return custom_names.get(sku_id, item.get('nickname', item.get('name', item.get('title', 'Unnamed Item'))))
+
+def set_robot_state(new_state, task_id=None):
+    """Set the robot state with thread safety and timeout management"""
+    global robot_state, robot_state_timestamp, current_operation_task_id, state_timeout_timer
+    
+    with robot_state_lock:
+        old_state = robot_state
+        robot_state = new_state
+        robot_state_timestamp = time.time()
+        
+        if task_id:
+            current_operation_task_id = task_id
+            
+        # Cancel existing timeout timer
+        if state_timeout_timer:
+            state_timeout_timer.cancel()
+            state_timeout_timer = None
+            
+        # Set timeout timer for OPERATING state
+        if new_state == RobotState.OPERATING:
+            state_timeout_timer = threading.Timer(STATE_TIMEOUT_SECONDS, timeout_robot_state)
+            state_timeout_timer.start()
+            logger.info(f"🤖 State: {old_state.value} → {new_state.value} (Task: {task_id}, Timeout: {STATE_TIMEOUT_SECONDS}s)")
+        else:
+            current_operation_task_id = None
+            logger.info(f"🤖 State: {old_state.value} → {new_state.value}")
+            
+        # Emit state change to frontend
+        socketio.emit('robot_state_update', {
+            'state': new_state.value,
+            'timestamp': robot_state_timestamp,
+            'task_id': current_operation_task_id
+        })
+
+def timeout_robot_state():
+    """Called when the state timeout expires"""
+    global robot_state
+    with robot_state_lock:
+        if robot_state == RobotState.OPERATING:
+            logger.warning(f"⏰ Robot state timeout after {STATE_TIMEOUT_SECONDS}s - resetting to IDLE")
+            set_robot_state(RobotState.IDLE)
+            
+            # Emit timeout notification to frontend
+            socketio.emit('robot_timeout', {
+                'message': f'Robot operation timed out after {STATE_TIMEOUT_SECONDS//60} minutes',
+                'previous_task_id': current_operation_task_id
+            })
+
+def get_robot_state():
+    """Get current robot state with thread safety"""
+    with robot_state_lock:
+        return {
+            'state': robot_state.value,
+            'timestamp': robot_state_timestamp,
+            'task_id': current_operation_task_id,
+            'uptime_seconds': time.time() - robot_state_timestamp
+        }
 
 class AutoDroidWebApp:
     def __init__(self):
@@ -151,7 +225,7 @@ class AutoDroidWebApp:
     
     async def handle_state_update(self, message):
         """Handle state update messages from Galbot"""
-        global current_tasks
+        global current_tasks, current_operation_task_id
         
         values = message.get("values", {})
         state = values.get("states")
@@ -165,6 +239,22 @@ class AutoDroidWebApp:
             }
             
             logger.info(f"Task {task_id} state: {state}")
+            
+            # Update robot state based on task progress (only for current operation)
+            if task_id == current_operation_task_id:
+                if state == "START":
+                    # Robot started working - keep state as OPERATING
+                    logger.info(f"🤖 Robot started working on task {task_id}")
+                elif state in ["SUCCEED", "SUCCEEDED"]:
+                    # Operation succeeded
+                    set_robot_state(RobotState.SUCCEEDED)
+                    # Reset to IDLE after a brief moment
+                    threading.Timer(2.0, lambda: set_robot_state(RobotState.IDLE)).start()
+                elif state in ["FAIL", "FAILED"]:
+                    # Operation failed
+                    set_robot_state(RobotState.FAILED)
+                    # Reset to IDLE after a brief moment
+                    threading.Timer(2.0, lambda: set_robot_state(RobotState.IDLE)).start()
             
             # Emit to frontend
             socketio.emit('task_state_update', {
@@ -224,8 +314,16 @@ class AutoDroidWebApp:
     
     def stop(self):
         """Stop the background task"""
+        global state_timeout_timer
         self.should_stop = True
         self.is_connected = False
+        
+        # Cancel any active timeout timer
+        if state_timeout_timer:
+            state_timeout_timer.cancel()
+            state_timeout_timer = None
+            logger.info("🔧 Cancelled robot state timeout timer")
+            
         if self.loop and not self.loop.is_closed():
             self.loop.call_soon_threadsafe(self.loop.stop)
 
@@ -280,10 +378,11 @@ def get_items():
 
 @app.route('/api/pick_item', methods=['POST'])
 def api_pick_item():
-    """API endpoint to pick an item"""
+    """API endpoint to pick an item - waits for completion and returns final result"""
     data = request.get_json()
     sku_id = data.get('sku_id')
     quantity = data.get('quantity', 1)
+    timeout = data.get('timeout', 180)  # Default 3 minutes, can be overridden
     
     if not sku_id:
         return jsonify({'error': 'sku_id is required'}), 400
@@ -291,30 +390,112 @@ def api_pick_item():
     if not autodroid_app.is_connected:
         return jsonify({'error': 'Not connected to AutoDroid. Please wait for reconnection.'}), 503
     
-    # Schedule the pick operation as fire-and-forget
-    def pick_async():
+    # Check robot state before allowing new operation
+    current_state = get_robot_state()
+    if current_state['state'] != RobotState.IDLE.value:
+        return jsonify({
+            'error': f'Robot is currently {current_state["state"]}. Please wait for operation to complete.',
+            'robot_state': current_state
+        }), 409  # Conflict status code
+    
+    def pick_and_wait():
         try:
             if autodroid_app.loop and not autodroid_app.loop.is_closed():
-                # Just send the pick request without waiting for response
-                # The UI will get updates via WebSocket state changes
-                asyncio.run_coroutine_threadsafe(
-                    autodroid_app.send_pick_request(sku_id, quantity), 
-                    autodroid_app.loop
-                )
-                return True
+                # Send the pick request
+                async def send_pick_request():
+                    try:
+                        message = {
+                            "op": "call_galbot",
+                            "service": "/expo/goods/order",
+                            "args": {
+                                "sku_ids": [{"sku_id": sku_id, "quantity": quantity}]
+                            }
+                        }
+                        await autodroid_app.client.send_message(message)
+                        logger.info(f"Sent pick request for SKU {sku_id}")
+                        
+                        # Set robot state to OPERATING
+                        set_robot_state(RobotState.OPERATING)
+                        return True
+                    except Exception as e:
+                        logger.error(f"Error sending pick request: {e}")
+                        return False
+                
+                # Send the request
+                future = asyncio.run_coroutine_threadsafe(send_pick_request(), autodroid_app.loop)
+                send_success = future.result(timeout=5.0)
+                
+                if not send_success:
+                    return {'success': False, 'error': 'Failed to send pick request'}
+                
+                # Wait for operation to complete
+                start_time = time.time()
+                poll_interval = 0.5  # Check every 500ms
+                
+                while time.time() - start_time < timeout:
+                    current_state = get_robot_state()
+                    state_value = current_state['state']
+                    
+                    if state_value == RobotState.SUCCEEDED.value:
+                        return {
+                            'success': True,
+                            'result': 'succeeded',
+                            'message': 'Item picked successfully',
+                            'robot_state': current_state,
+                            'duration_seconds': time.time() - start_time
+                        }
+                    elif state_value == RobotState.FAILED.value:
+                        return {
+                            'success': False,
+                            'result': 'failed',
+                            'message': 'Item picking failed',
+                            'robot_state': current_state,
+                            'duration_seconds': time.time() - start_time
+                        }
+                    elif state_value == RobotState.IDLE.value and time.time() - start_time > 5:
+                        # Robot went back to IDLE after some time - this means operation completed
+                        # Check if we missed the final state, assume timeout
+                        return {
+                            'success': False,
+                            'result': 'timeout',
+                            'message': 'Operation timed out or was reset',
+                            'robot_state': current_state,
+                            'duration_seconds': time.time() - start_time
+                        }
+                    
+                    # Sleep before next poll
+                    time.sleep(poll_interval)
+                
+                # Timeout reached
+                final_state = get_robot_state()
+                return {
+                    'success': False,
+                    'result': 'timeout',
+                    'message': f'Operation timed out after {timeout} seconds',
+                    'robot_state': final_state,
+                    'duration_seconds': timeout
+                }
+                
             else:
-                return False
+                return {'success': False, 'error': 'Not connected to AutoDroid'}
+                
         except Exception as e:
-            logger.error(f"Error in pick_async: {e}")
-            return False
+            logger.error(f"Error in pick_and_wait: {e}")
+            return {'success': False, 'error': str(e)}
     
     try:
-        success = pick_async()
+        result = pick_and_wait()
         
-        if success:
-            return jsonify({'success': True, 'message': 'Pick request sent successfully'})
+        if result['success']:
+            return jsonify(result), 200
         else:
-            return jsonify({'error': 'Failed to send pick request - not connected'}), 503
+            # Return appropriate error code based on the error type
+            if 'timeout' in result.get('result', ''):
+                return jsonify(result), 408  # Request Timeout
+            elif 'failed' in result.get('result', ''):
+                return jsonify(result), 422  # Unprocessable Entity (robot failed)
+            else:
+                return jsonify(result), 500  # Internal Server Error
             
     except Exception as e:
         logger.error(f"Error in pick_item API: {e}")
@@ -326,8 +507,32 @@ def get_status():
     return jsonify({
         'connected': autodroid_app.is_connected,
         'items_count': len(available_items),
-        'active_tasks': len(current_tasks)
+        'active_tasks': len(current_tasks),
+        'robot_state': get_robot_state()
     })
+
+@app.route('/api/robot/state')
+def get_robot_state_api():
+    """Get current robot state"""
+    return jsonify(get_robot_state())
+
+@app.route('/api/robot/reset', methods=['POST'])
+def reset_robot_state():
+    """Manually reset robot state to IDLE (emergency reset)"""
+    try:
+        old_state = get_robot_state()
+        set_robot_state(RobotState.IDLE)
+        logger.info(f"🔧 Manual reset: Robot state reset from {old_state['state']} to IDLE")
+        
+        return jsonify({
+            'success': True,
+            'message': 'Robot state reset to IDLE',
+            'previous_state': old_state,
+            'current_state': get_robot_state()
+        })
+    except Exception as e:
+        logger.error(f"Error resetting robot state: {e}")
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/api/update_name', methods=['POST'])
 def update_item_name():
