@@ -133,14 +133,20 @@ class AutoDroidWebApp:
         self.items_loaded = False  # Flag to track if items have been loaded once
         
     async def connect_and_listen(self):
-        """Connect to Galbot WebSocket and start listening"""
-        while not self.should_stop:  # Keep trying to reconnect
+        """Connect to Galbot WebSocket and start listening with aggressive reconnection"""
+        reconnect_delay = 1  # Start with 1 second delay
+        max_reconnect_delay = 30  # Maximum 30 seconds between reconnection attempts
+        
+        while not self.should_stop:
+            connection_start_time = time.time()
+            
             try:
-                logger.info(f"Attempting to connect to Galbot WebSocket at {self.client.websocket_url}")
+                logger.info(f"🔄 Attempting to connect to Galbot WebSocket at {self.client.websocket_url}")
                 
                 if await self.client.connect():
                     self.is_connected = True
-                    logger.info("Connected to Galbot WebSocket")
+                    reconnect_delay = 1  # Reset delay on successful connection
+                    logger.info("✅ Connected to Galbot WebSocket with health monitoring")
                     
                     # Emit connection status to frontend
                     socketio.emit('connection_status', {'connected': True})
@@ -153,27 +159,51 @@ class AutoDroidWebApp:
                     else:
                         logger.info("Reconnected - skipping item reload (items already loaded)")
                     
-                    # Start listening for messages
-                    while self.is_connected and not self.should_stop:
+                    # Start listening for messages with health monitoring
+                    while self.is_connected and not self.should_stop and self.client.is_healthy:
                         try:
+                            # Check connection health before receiving
+                            if not self.client.websocket or self.client.websocket.closed:
+                                logger.warning("WebSocket connection is closed - breaking listen loop")
+                                break
+                                
                             message = await self.client.receive_message()
                             await self.handle_galbot_message(message)
+                            
+                        except asyncio.TimeoutError:
+                            logger.warning("Message receive timeout - connection may be stale")
+                            break
                         except Exception as e:
                             logger.error(f"Error receiving message: {e}")
                             break
+                            
+                    logger.info("Message listening loop ended")
                 else:
-                    logger.error("Failed to connect to Galbot WebSocket")
+                    logger.error("❌ Failed to connect to Galbot WebSocket")
                     
             except Exception as e:
                 logger.error(f"Error in connect_and_listen: {e}")
             finally:
+                # Always clean up connection state
                 self.is_connected = False
                 socketio.emit('connection_status', {'connected': False})
                 
+                # Close the connection properly
+                try:
+                    await self.client.disconnect()
+                except Exception as e:
+                    logger.error(f"Error during disconnect cleanup: {e}")
+                
+            # Calculate connection duration for logging
+            connection_duration = time.time() - connection_start_time
+            
             # Wait before reconnecting (unless stopping)
             if not self.should_stop:
-                logger.info("Attempting to reconnect in 5 seconds...")
-                await asyncio.sleep(5)
+                logger.info(f"🔄 Connection lasted {connection_duration:.1f}s. Reconnecting in {reconnect_delay}s...")
+                await asyncio.sleep(reconnect_delay)
+                
+                # Exponential backoff with maximum delay
+                reconnect_delay = min(reconnect_delay * 1.5, max_reconnect_delay)
             
     async def fetch_items_list(self, force_refresh=False):
         """Fetch and store the items list"""

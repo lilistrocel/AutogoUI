@@ -4,6 +4,8 @@ import json
 import uuid
 from typing import Dict, List, Optional
 import logging
+import time
+import ssl
 
 # Set up logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -16,53 +18,159 @@ class GalbotWebSocketClient:
         self.pending_requests = {}
         self.task_states = {}
         
+        # Connection health monitoring
+        self.last_pong_time = 0
+        self.ping_interval = 30  # Send ping every 30 seconds
+        self.ping_timeout = 10   # Wait 10 seconds for pong response
+        self.is_healthy = False
+        self.ping_task = None
+        
     async def connect(self):
-        """Connect to the WebSocket server"""
+        """Connect to the WebSocket server with proper connection parameters"""
         try:
-            self.websocket = await websockets.connect(self.websocket_url)
-            logger.info(f"Connected to {self.websocket_url}")
+            # Close existing connection if any
+            if self.websocket:
+                try:
+                    await self.websocket.close()
+                except:
+                    pass
+                self.websocket = None
+            
+            # Connect with proper parameters for stability
+            connect_timeout = 10  # 10 second connection timeout
+            
+            # Create SSL context that's more permissive for local connections
+            ssl_context = None
+            if self.websocket_url.startswith('wss://'):
+                ssl_context = ssl.create_default_context()
+                ssl_context.check_hostname = False
+                ssl_context.verify_mode = ssl.CERT_NONE
+            
+            self.websocket = await asyncio.wait_for(
+                websockets.connect(
+                    self.websocket_url,
+                    ssl=ssl_context,
+                    ping_interval=None,  # We'll handle our own ping/pong
+                    ping_timeout=None,
+                    close_timeout=5,
+                    max_size=2**20,      # 1MB max message size
+                    read_limit=2**16,    # 64KB read buffer
+                    write_limit=2**16,   # 64KB write buffer
+                    compression=None,    # Disable compression for stability
+                ),
+                timeout=connect_timeout
+            )
+            
+            self.last_pong_time = time.time()
+            self.is_healthy = True
+            
+            # Start ping task for connection health monitoring
+            if self.ping_task:
+                self.ping_task.cancel()
+            self.ping_task = asyncio.create_task(self._ping_loop())
+            
+            logger.info(f"Connected to {self.websocket_url} with health monitoring")
             return True
+            
+        except asyncio.TimeoutError:
+            logger.error(f"Connection timeout after {connect_timeout}s")
+            return False
         except Exception as e:
             logger.error(f"Failed to connect: {e}")
             return False
     
+    async def _ping_loop(self):
+        """Background task to monitor connection health with ping/pong"""
+        while self.websocket and not self.websocket.closed:
+            try:
+                await asyncio.sleep(self.ping_interval)
+                
+                if self.websocket and not self.websocket.closed:
+                    # Send ping and wait for pong
+                    pong_waiter = await self.websocket.ping()
+                    try:
+                        await asyncio.wait_for(pong_waiter, timeout=self.ping_timeout)
+                        self.last_pong_time = time.time()
+                        self.is_healthy = True
+                        logger.debug("Ping/pong successful - connection healthy")
+                    except asyncio.TimeoutError:
+                        logger.warning(f"Ping timeout - no pong received within {self.ping_timeout}s")
+                        self.is_healthy = False
+                        break
+                        
+            except Exception as e:
+                logger.error(f"Error in ping loop: {e}")
+                self.is_healthy = False
+                break
+        
+        logger.info("Ping loop ended - connection no longer healthy")
+        self.is_healthy = False
+    
     async def disconnect(self):
-        """Disconnect from the WebSocket server"""
+        """Properly disconnect from the WebSocket server"""
+        self.is_healthy = False
+        
+        # Cancel ping task
+        if self.ping_task:
+            self.ping_task.cancel()
+            self.ping_task = None
+            
+        # Close websocket connection
         if self.websocket:
-            await self.websocket.close()
-            logger.info("Disconnected from WebSocket")
+            try:
+                await self.websocket.close()
+                logger.info("Disconnected from WebSocket")
+            except Exception as e:
+                logger.error(f"Error during disconnect: {e}")
+            finally:
+                self.websocket = None
     
     def generate_request_id(self) -> str:
         """Generate a unique request ID"""
         return str(uuid.uuid4()).replace('-', '')[:12]
     
     async def send_message(self, message: Dict) -> str:
-        """Send a message to the WebSocket server"""
-        if not self.websocket:
+        """Send a message to the WebSocket server with retry logic"""
+        if not self.websocket or self.websocket.closed:
             raise Exception("Not connected to WebSocket")
         
         request_id = message.get("request_id", self.generate_request_id())
         message["request_id"] = request_id
         
         try:
-            await self.websocket.send(json.dumps(message))
+            message_json = json.dumps(message)
+            await asyncio.wait_for(self.websocket.send(message_json), timeout=5.0)
             logger.info(f"Sent message: {message.get('op', 'unknown')} -> {message.get('service', 'no-service')}")
             return request_id
+        except asyncio.TimeoutError:
+            logger.error("Send message timeout after 5s")
+            self.is_healthy = False
+            raise Exception("Send timeout")
         except Exception as e:
             logger.error(f"Failed to send message: {e}")
+            self.is_healthy = False
             raise
     
     async def receive_message(self) -> Dict:
-        """Receive a message from the WebSocket server"""
-        if not self.websocket:
+        """Receive a message from the WebSocket server with better error handling"""
+        if not self.websocket or self.websocket.closed:
             raise Exception("Not connected to WebSocket")
         
         try:
-            message = await self.websocket.recv()
-            data = json.loads(message)
-            # Only log essential info about received messages
+            # Receive with timeout to avoid hanging forever
+            message = await asyncio.wait_for(self.websocket.recv(), timeout=60.0)
+            
+            # Parse JSON
+            try:
+                data = json.loads(message)
+            except json.JSONDecodeError as e:
+                logger.error(f"Invalid JSON received: {e}")
+                raise Exception(f"Invalid JSON: {e}")
+            
+            # Log essential info about received messages
             msg_type = data.get('op', 'unknown')
             service = data.get('service', '')
+            
             if msg_type == 'galbot_push' and '/states/push' in service:
                 # Log state updates concisely
                 values = data.get('values', {})
@@ -75,10 +183,21 @@ class GalbotWebSocketClient:
                 logger.info(f"Response: {status} for {service}")
             else:
                 # Log other messages without full content
-                logger.info(f"Received: {msg_type} from {service}")
+                logger.debug(f"Received: {msg_type} from {service}")
+                
             return data
+            
+        except asyncio.TimeoutError:
+            logger.warning("Receive timeout after 60s - connection may be stale")
+            self.is_healthy = False
+            raise Exception("Receive timeout")
+        except websockets.exceptions.ConnectionClosed as e:
+            logger.error(f"WebSocket connection closed: {e}")
+            self.is_healthy = False
+            raise
         except Exception as e:
             logger.error(f"Failed to receive message: {e}")
+            self.is_healthy = False
             raise
     
     async def get_items_list(self, current_page: int = 1, page_size: int = 48) -> Optional[Dict]:
