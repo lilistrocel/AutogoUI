@@ -28,11 +28,15 @@ class GalbotWebSocketClient:
     async def connect(self):
         """Connect to the WebSocket server with proper connection parameters"""
         try:
+            logger.debug("🔍 DEBUG: Starting connection process")
+            
             # Close existing connection if any
             if self.websocket:
+                logger.debug("🔍 DEBUG: Closing existing websocket")
                 try:
                     await self.websocket.close()
-                except:
+                except Exception as e:
+                    logger.debug(f"🔍 DEBUG: Error closing existing websocket: {e}")
                     pass
                 self.websocket = None
             
@@ -46,28 +50,43 @@ class GalbotWebSocketClient:
                 ssl_context.check_hostname = False
                 ssl_context.verify_mode = ssl.CERT_NONE
             
+            # Connect with basic parameters for maximum compatibility
+            connect_kwargs = {
+                'ping_interval': None,  # We'll handle our own ping/pong
+                'ping_timeout': None,
+            }
+            
+            # Add SSL context if needed
+            if ssl_context:
+                connect_kwargs['ssl'] = ssl_context
+                
+            # Try to add optional parameters if supported
+            try:
+                # Test if newer parameters are supported
+                import inspect
+                sig = inspect.signature(websockets.connect)
+                if 'close_timeout' in sig.parameters:
+                    connect_kwargs['close_timeout'] = 5
+                if 'max_size' in sig.parameters:
+                    connect_kwargs['max_size'] = 2**20  # 1MB
+                if 'compression' in sig.parameters:
+                    connect_kwargs['compression'] = None
+            except Exception:
+                pass  # Use basic parameters only
+                
             self.websocket = await asyncio.wait_for(
-                websockets.connect(
-                    self.websocket_url,
-                    ssl=ssl_context,
-                    ping_interval=None,  # We'll handle our own ping/pong
-                    ping_timeout=None,
-                    close_timeout=5,
-                    max_size=2**20,      # 1MB max message size
-                    read_limit=2**16,    # 64KB read buffer
-                    write_limit=2**16,   # 64KB write buffer
-                    compression=None,    # Disable compression for stability
-                ),
+                websockets.connect(self.websocket_url, **connect_kwargs),
                 timeout=connect_timeout
             )
             
             self.last_pong_time = time.time()
             self.is_healthy = True
             
-            # Start ping task for connection health monitoring
-            if self.ping_task:
-                self.ping_task.cancel()
-            self.ping_task = asyncio.create_task(self._ping_loop())
+            # Disable ping/pong for now to avoid compatibility issues
+            # TODO: Re-enable once we identify the right ping/pong implementation
+            # if self.ping_task:
+            #     self.ping_task.cancel()
+            # self.ping_task = asyncio.create_task(self._ping_loop())
             
             logger.info(f"Connected to {self.websocket_url} with health monitoring")
             return True
@@ -81,22 +100,40 @@ class GalbotWebSocketClient:
     
     async def _ping_loop(self):
         """Background task to monitor connection health with ping/pong"""
-        while self.websocket and not self.websocket.closed:
+        while self.websocket:
             try:
                 await asyncio.sleep(self.ping_interval)
                 
-                if self.websocket and not self.websocket.closed:
-                    # Send ping and wait for pong
-                    pong_waiter = await self.websocket.ping()
+                if self.websocket:
+                    # Check if connection is closed (compatible with different websockets versions)
                     try:
-                        await asyncio.wait_for(pong_waiter, timeout=self.ping_timeout)
+                        is_closed = getattr(self.websocket, 'closed', False)
+                        if is_closed:
+                            break
+                    except Exception:
+                        pass  # Continue with ping attempt
+                    # Try to send ping if supported, otherwise just assume healthy
+                    try:
+                        if hasattr(self.websocket, 'ping'):
+                            pong_waiter = await self.websocket.ping()
+                            try:
+                                await asyncio.wait_for(pong_waiter, timeout=self.ping_timeout)
+                                self.last_pong_time = time.time()
+                                self.is_healthy = True
+                                logger.debug("Ping/pong successful - connection healthy")
+                            except asyncio.TimeoutError:
+                                logger.warning(f"Ping timeout - no pong received within {self.ping_timeout}s")
+                                self.is_healthy = False
+                                break
+                        else:
+                            # No ping support, just mark as healthy and continue
+                            self.last_pong_time = time.time()
+                            self.is_healthy = True
+                            logger.debug("No ping support - assuming connection healthy")
+                    except Exception as ping_error:
+                        logger.warning(f"Ping failed: {ping_error} - assuming connection healthy")
                         self.last_pong_time = time.time()
                         self.is_healthy = True
-                        logger.debug("Ping/pong successful - connection healthy")
-                    except asyncio.TimeoutError:
-                        logger.warning(f"Ping timeout - no pong received within {self.ping_timeout}s")
-                        self.is_healthy = False
-                        break
                         
             except Exception as e:
                 logger.error(f"Error in ping loop: {e}")
@@ -131,8 +168,17 @@ class GalbotWebSocketClient:
     
     async def send_message(self, message: Dict) -> str:
         """Send a message to the WebSocket server with retry logic"""
-        if not self.websocket or self.websocket.closed:
+        if not self.websocket:
             raise Exception("Not connected to WebSocket")
+        
+        # Check if connection is closed (compatible with different websockets versions)
+        try:
+            is_closed = getattr(self.websocket, 'closed', False)
+            if is_closed:
+                raise Exception("WebSocket is closed")
+        except Exception:
+            # If we can't check closed status, continue and let send() handle it
+            pass
         
         request_id = message.get("request_id", self.generate_request_id())
         message["request_id"] = request_id
@@ -152,19 +198,39 @@ class GalbotWebSocketClient:
             raise
     
     async def receive_message(self) -> Dict:
-        """Receive a message from the WebSocket server with better error handling"""
-        if not self.websocket or self.websocket.closed:
+        """Receive a message from the WebSocket server with comprehensive debugging"""
+        logger.debug("🔍 receive_message() called")
+        
+        if not self.websocket:
+            logger.error("❌ DEBUG: No websocket object")
             raise Exception("Not connected to WebSocket")
         
+        # Check if connection is closed (compatible with different websockets versions)
         try:
-            # Receive with timeout to avoid hanging forever
-            message = await asyncio.wait_for(self.websocket.recv(), timeout=60.0)
+            is_closed = getattr(self.websocket, 'closed', False)
+            logger.debug(f"🔍 DEBUG: Connection closed status: {is_closed}")
+            if is_closed:
+                logger.error("❌ DEBUG: WebSocket is closed")
+                raise Exception("WebSocket is closed")
+        except Exception as e:
+            logger.debug(f"🔍 DEBUG: Could not check closed status: {e}")
+            # If we can't check closed status, continue and let recv() handle it
+            pass
+        
+        logger.debug("🔍 DEBUG: About to call websocket.recv()")
+        
+        try:
+            # Receive without timeout - let the websocket handle keepalive
+            message = await self.websocket.recv()
+            logger.debug(f"🔍 DEBUG: Received raw message: {len(message) if message else 0} bytes")
             
             # Parse JSON
             try:
                 data = json.loads(message)
+                logger.debug(f"🔍 DEBUG: Parsed JSON successfully: {data.get('op', 'unknown')}")
             except json.JSONDecodeError as e:
-                logger.error(f"Invalid JSON received: {e}")
+                logger.error(f"❌ DEBUG: Invalid JSON received: {e}")
+                logger.error(f"❌ DEBUG: Raw message: {message[:200]}...")
                 raise Exception(f"Invalid JSON: {e}")
             
             # Log essential info about received messages
@@ -185,18 +251,17 @@ class GalbotWebSocketClient:
                 # Log other messages without full content
                 logger.debug(f"Received: {msg_type} from {service}")
                 
+            logger.debug("🔍 DEBUG: receive_message() completing successfully")
             return data
             
-        except asyncio.TimeoutError:
-            logger.warning("Receive timeout after 60s - connection may be stale")
-            self.is_healthy = False
-            raise Exception("Receive timeout")
+        # No timeout handling needed since we removed the timeout
         except websockets.exceptions.ConnectionClosed as e:
-            logger.error(f"WebSocket connection closed: {e}")
+            logger.error(f"❌ DEBUG: WebSocket connection closed during recv(): {e}")
             self.is_healthy = False
             raise
         except Exception as e:
-            logger.error(f"Failed to receive message: {e}")
+            logger.error(f"❌ DEBUG: Failed to receive message: {type(e).__name__}: {e}")
+            logger.error(f"❌ DEBUG: WebSocket state: {getattr(self.websocket, 'state', 'unknown')}")
             self.is_healthy = False
             raise
     

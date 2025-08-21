@@ -159,22 +159,45 @@ class AutoDroidWebApp:
                     else:
                         logger.info("Reconnected - skipping item reload (items already loaded)")
                     
-                    # Start listening for messages with health monitoring
-                    while self.is_connected and not self.should_stop and self.client.is_healthy:
+                    # Start listening for messages with detailed debugging
+                    logger.info("🔍 DEBUG: Starting message listening loop")
+                    message_count = 0
+                    
+                    while self.is_connected and not self.should_stop:
                         try:
-                            # Check connection health before receiving
-                            if not self.client.websocket or self.client.websocket.closed:
-                                logger.warning("WebSocket connection is closed - breaking listen loop")
-                                break
-                                
-                            message = await self.client.receive_message()
-                            await self.handle_galbot_message(message)
+                            logger.debug(f"🔍 DEBUG: Loop iteration {message_count + 1}")
                             
-                        except asyncio.TimeoutError:
-                            logger.warning("Message receive timeout - connection may be stale")
-                            break
+                            # Check connection health before receiving (compatible with different websockets versions)
+                            if not self.client.websocket:
+                                logger.warning("❌ DEBUG: WebSocket connection is None - breaking listen loop")
+                                break
+                            
+                            # Check if connection is closed (handle different websockets versions)
+                            try:
+                                is_closed = getattr(self.client.websocket, 'closed', False)
+                                logger.debug(f"🔍 DEBUG: Connection closed check: {is_closed}")
+                                if is_closed:
+                                    logger.warning("❌ DEBUG: WebSocket connection is closed - breaking listen loop")
+                                    break
+                            except Exception as e:
+                                logger.debug(f"🔍 DEBUG: Could not check closed status: {e}")
+                                # If we can't check closed status, continue and let receive handle it
+                                pass
+                            
+                            logger.debug("🔍 DEBUG: About to call receive_message()")
+                            message = await self.client.receive_message()
+                            message_count += 1
+                            logger.debug(f"🔍 DEBUG: Received message #{message_count}")
+                            
+                            logger.debug("🔍 DEBUG: About to handle message")
+                            await self.handle_galbot_message(message)
+                            logger.debug("🔍 DEBUG: Message handled successfully")
+                            
+                        # No timeout handling needed since we removed recv() timeout
                         except Exception as e:
-                            logger.error(f"Error receiving message: {e}")
+                            logger.error(f"❌ DEBUG: Error in message loop: {type(e).__name__}: {e}")
+                            import traceback
+                            logger.error(f"❌ DEBUG: Traceback: {traceback.format_exc()}")
                             break
                             
                     logger.info("Message listening loop ended")
