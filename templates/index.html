@@ -1385,8 +1385,8 @@
                     <span id="itemCount"></span>
                 </div>
                 <div class="controls">
-                    <button class="btn btn-primary" id="refreshBtn" onclick="refreshItems()">
-                        🔄 Refresh Items
+                    <button class="btn btn-primary" id="refreshBtn" onclick="refreshItems()" title="Force refresh item list from server">
+                        🔄 Hard Refresh
                     </button>
                     <button class="btn btn-primary" id="fullscreenBtn" onclick="toggleFullscreen()" title="Toggle Fullscreen (F11)">
                         ⛶ Fullscreen
@@ -1554,6 +1554,14 @@
                 console.log('🔄 Full re-render:', !initialRenderComplete ? 'Initial load' : 'Forced refresh');
                 renderItems();
                 addLogEntry(`Loaded ${data.total} items`, 'success');
+                
+                // Re-enable refresh button if this was a manual refresh
+                const refreshBtn = document.getElementById('refreshBtn');
+                if (refreshBtn && refreshBtn.disabled) {
+                    refreshBtn.disabled = false;
+                    refreshBtn.innerHTML = '🔄 Hard Refresh';
+                    showNotification('Items refreshed successfully!', 'success');
+                }
             } else {
                 console.log('📝 Skipping re-render - updating in place');
                 if (isNameUpdate) {
@@ -2266,6 +2274,11 @@
         }
 
         function refreshItems() {
+            // Disable button to prevent multiple clicks
+            const refreshBtn = document.getElementById('refreshBtn');
+            refreshBtn.disabled = true;
+            refreshBtn.innerHTML = '⟳ Refreshing...';
+            
             // Clear all item states when manually refreshing
             itemStates.clear();
             pickingItems.clear();
@@ -2273,7 +2286,14 @@
             console.log('🔄 Cleared all item states and reset render flag for manual refresh');
             
             socket.emit('refresh_items');
-            addLogEntry('Refreshing items list...', 'info');
+            addLogEntry('Hard refreshing items list from server...', 'info');
+            showNotification('Refreshing items from server...', 'info');
+            
+            // Re-enable button after 3 seconds (in case of no response)
+            setTimeout(() => {
+                refreshBtn.disabled = false;
+                refreshBtn.innerHTML = '🔄 Hard Refresh';
+            }, 3000);
         }
 
         function editItemName(skuId) {

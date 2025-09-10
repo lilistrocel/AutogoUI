@@ -670,20 +670,35 @@ def handle_disconnect():
 
 @socketio.on('refresh_items')
 def handle_refresh_items():
-    """Handle request to refresh items"""
+    """Handle request to refresh items with better feedback"""
+    logger.info("🔄 Manual refresh requested by user")
+    
     if autodroid_app.is_connected:
         # Schedule refresh in the background with force_refresh=True
         def refresh_async():
-            if autodroid_app.loop:
-                asyncio.run_coroutine_threadsafe(
-                    autodroid_app.fetch_items_list(force_refresh=True), 
-                    autodroid_app.loop
-                )
+            try:
+                if autodroid_app.loop:
+                    logger.info("🔄 Starting hard refresh of items list...")
+                    future = asyncio.run_coroutine_threadsafe(
+                        autodroid_app.fetch_items_list(force_refresh=True), 
+                        autodroid_app.loop
+                    )
+                    # Wait for completion with timeout
+                    future.result(timeout=10.0)
+                    logger.info("✅ Hard refresh completed successfully")
+                    socketio.emit('status_message', {'message': 'Items refreshed successfully!', 'type': 'success'})
+                else:
+                    logger.error("❌ No event loop available for refresh")
+                    socketio.emit('status_message', {'message': 'Refresh failed - no event loop', 'type': 'error'})
+            except Exception as e:
+                logger.error(f"❌ Error during refresh: {e}")
+                socketio.emit('status_message', {'message': f'Refresh failed: {str(e)}', 'type': 'error'})
         
         threading.Thread(target=refresh_async, daemon=True).start()
-        emit('status_message', {'message': 'Manually refreshing items...', 'type': 'info'})
+        emit('status_message', {'message': 'Hard refreshing items from server...', 'type': 'info'})
     else:
-        emit('status_message', {'message': 'Not connected to AutoDroid', 'type': 'error'})
+        logger.warning("❌ Refresh requested but not connected to AutoDroid")
+        emit('status_message', {'message': 'Cannot refresh - not connected to AutoDroid', 'type': 'error'})
 
 if __name__ == '__main__':
     # Start the background WebSocket task
